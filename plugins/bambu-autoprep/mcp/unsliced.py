@@ -59,8 +59,11 @@ def prepare_unsliced_3mf(model_path: str, output_dir: str, use: str = "general",
                          output_name: str = "model_unsliced.3mf",
                          printer: str | None = None, nozzle_mm: float = 0.4,
                          filament: str = "PLA", plate: str = "Textured PEI Plate",
-                         embed_settings: bool = True, project_template_path: str | None = None) -> dict:
+                         embed_settings: bool = True, project_template_path: str | None = None,
+                         presentation: dict | None = None) -> dict:
     """Create an unsliced Bambu project with applied settings, or optional geometry-only export."""
+    from presentation import metadata, render_poster, create_guide
+    presentation = metadata(presentation)
     import json
     import shutil
     import tempfile
@@ -86,7 +89,7 @@ def prepare_unsliced_3mf(model_path: str, output_dir: str, use: str = "general",
         mesh.export(stl)
         analysis = analyze_model(str(stl))
         preview = work / "preview.png"
-        render_geometry_preview(mesh, preview)
+        render_poster(mesh, preview, presentation)
         x, y, z = analysis["dimensions_mm"]
         recommended = {
             "layer_height": round(min(0.2, nozzle_mm * 0.5), 3),
@@ -122,11 +125,13 @@ def prepare_unsliced_3mf(model_path: str, output_dir: str, use: str = "general",
         guide += "6. Start the print manually after review. This plugin never starts a physical printer.\n\n"
         guide += "Support estimates may include bridges. Fit, strength and tiny details need review.\n"
         (work / "PRINT_GUIDE.md").write_text(guide, encoding="utf-8")
-        for name in (output_name, "printable_model.stl", "preview.png", "settings_summary.json", "PRINT_GUIDE.md"):
+        create_guide(mesh, work / "Instruction_Manual.pdf", summary, output_name, presentation)
+        for name in (output_name, "printable_model.stl", "preview.png", "settings_summary.json", "PRINT_GUIDE.md", "Instruction_Manual.pdf"):
             shutil.copy2(work / name, outdir / name)
     return {"ok": True, "three_mf": str(outdir / output_name),
             "model_file": str(outdir / "printable_model.stl"), "preview_png": str(outdir / "preview.png"),
             "settings_summary": str(outdir / "settings_summary.json"), "print_guide": str(outdir / "PRINT_GUIDE.md"),
+            "instruction_pdf": str(outdir / "Instruction_Manual.pdf"),
             "status": "unsliced", "settings_embedded": embed_settings, "requires_manual_slicing": True,
             "printer_started": False}
 
@@ -148,13 +153,18 @@ def main():
     parser.add_argument("--nozzle-mm", type=float, default=0.4)
     parser.add_argument("--filament", default="PLA")
     parser.add_argument("--plate", default="Textured PEI Plate")
+    parser.add_argument("--presentation", default="{}", help="JSON: title, subtitle, use_steps, use_note, guide_style")
     args = parser.parse_args()
     # Reuse library functions, without mcp.run(), Bambu discovery or subprocess slicing.
     from server import generate_model, prepare_unsliced_3mf
     model = args.model
+    presentation = json.loads(args.presentation)
     if args.template:
+        presentation.setdefault("title", args.template.replace("-", " ").title())
+        uses = {"ghost": "Place the finished ghost on a stable flat surface as a decoration.", "cable-holder": "Place the holder on a flat desk and lay a suitably sized cable in its open groove. This is not a snap clip.", "phone-stand": "Place the stand on a stable desk, seat the phone behind the front lip and check balance before letting go."}
+        presentation.setdefault("use_steps", [uses[args.template]])
         model = generate_model(args.template, args.output_dir, json.loads(args.parameters))["model_file"]
-    print(json.dumps(prepare_unsliced_3mf(model, args.output_dir, use=args.use, embed_settings=not args.geometry_only, project_template_path=args.project_template, printer=args.printer, nozzle_mm=args.nozzle_mm, filament=args.filament, plate=args.plate), indent=2))
+    print(json.dumps(prepare_unsliced_3mf(model, args.output_dir, use=args.use, embed_settings=not args.geometry_only, project_template_path=args.project_template, printer=args.printer, nozzle_mm=args.nozzle_mm, filament=args.filament, plate=args.plate, presentation=presentation), indent=2))
 
 
 if __name__ == "__main__":

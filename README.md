@@ -12,7 +12,7 @@ If your Plugins screen offers **Upload plugin archive** instead of marketplace i
 
 `python scripts/package_plugin.py`
 
-Then upload `3D-Print-0.4.0.zip` through that option. This ZIP contains the skills and Python tools, without an active local stdio MCP configuration. It uses supported Work host Python/file execution for unsliced export. The GitHub source retains the local Bambu MCP configuration. To package that configuration for a compatible local host, use `python scripts/package_plugin.py --local-mcp`.
+Then upload `3D-Print-0.5.0.zip` through that option. This ZIP contains the skills and Python tools, without an active local stdio MCP configuration. It uses supported Work host Python/file execution for unsliced export. The GitHub source retains the local Bambu MCP configuration. To package that configuration for a compatible local host, use `python scripts/package_plugin.py --local-mcp`.
 
 Archive-installed plugins are a snapshot: a later GitHub commit does not update them automatically; upload an updated archive through the host's supported update flow.
 
@@ -37,7 +37,7 @@ The MCP tools never send a print job or start a physical printer. Review and sta
 
 ## Default workflow: download and slice yourself
 
-Version 0.4.0 saves the selected settings inside an unsliced Bambu project. The normal workflow is:
+Version 0.5.0 saves the selected settings inside an unsliced Bambu project. The normal workflow is:
 
 **Describe/upload a model → receive unsliced 3MF + STL + actual preview + recommended settings + print guide → download on your computer → open as a PROJECT in Bambu Studio → review saved hardware/settings → Slice plate → review → manually print.**
 
@@ -112,3 +112,13 @@ Unsliced output is checked with ZIP/XML validation, independent trimesh re-impor
 - `tests/`, `schemas/`, `scripts/`: validation
 
 Vendor template provenance and license: `plugins/bambu-autoprep/assets/README.md`.
+
+## Preview and guide style (0.5.0)
+
+Actual geometry is rendered in orthographic teal CAD views on a cream background, with a dark green uppercase title, two labelled views, real dimensions and an honest illustration footer. No unrelated concept image or invented assembly state is used. Both sides show the same geometry; the script does not infer removed lids or usage props from a single mesh.
+
+The default two-page PDF follows the compact print-and-use guide style: dimension strip, actual-model illustration, settings table, numbered print steps, finishing/use steps and pale green notes. `guide_style: "editorial"` uses the roomier manual palette with white paper and warm note boxes. The Markdown print guide remains available too.
+
+Supply `--presentation '{"title":"Ghost","subtitle":"A small desk decoration","use_steps":["Place on a stable shelf."],"guide_style":"compact"}'` or the MCP `presentation` object for task-specific text. Allowed fields: title, subtitle, up to four use_steps, use_note, guide_style (compact/editorial). Write use steps from the actual design, never fabricate fit, assembly, extra parts, slicing estimates or physical testing. Long instructions that exceed the layout are rejected instead of clipped. Other objects can use this presentation pipeline after actual geometry generation.
+
+Output additionally includes `Instruction_Manual.pdf`. Automatic-slicing packages also include `print_image.png` separately from the slicer preview, preserving the distinction between geometry and toolpaths. Exact pixel identity with reference images is not promised: the object, dimensions, view and instructions change with the actual model.

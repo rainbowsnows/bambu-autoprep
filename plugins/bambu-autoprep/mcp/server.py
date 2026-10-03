@@ -328,27 +328,8 @@ def analyze_model(model_path: str) -> dict[str, Any]:
 
 
 def render_geometry_preview(mesh, dest: Path) -> None:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    import numpy as np
-    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-    fig = plt.figure(figsize=(7, 6))
-    ax = fig.add_subplot(projection="3d")
-    step = max(1, math.ceil(len(mesh.faces) / 20000))
-    ax.add_collection3d(Poly3DCollection(mesh.triangles[::step], facecolor="#7FE7B6",
-                                       edgecolor="#246050", linewidth=0.15, alpha=0.9))
-    low, high = mesh.bounds
-    center = (low + high) / 2
-    half = float(np.max(high-low)) / 2 * 1.15
-    for setter, c in zip((ax.set_xlim, ax.set_ylim, ax.set_zlim), center):
-        setter(c-half, c+half)
-    ax.set_box_aspect((1, 1, 1))
-    ax.view_init(elev=22, azim=-65)
-    ax.set_xlabel("X (mm)"); ax.set_ylabel("Y (mm)"); ax.set_zlabel("Z (mm)")
-    ax.set_title("Geometry preview: input orientation, not sliced toolpaths")
-    fig.savefig(dest, dpi=130, bbox_inches="tight")
-    plt.close(fig)
+    from presentation import render_poster
+    render_poster(mesh, dest)
 
 
 def validate_sliced_3mf(path: Path) -> None:
@@ -522,11 +503,15 @@ def prepare_3mf(
                  "4. Start printing manually after reviewing the sliced project. AutoPrep cannot start the printer.\n"
                  "5. Let the plate cool; remove the part, supports, and brim carefully.\n")
         (work / "PRINT_GUIDE.md").write_text(guide.replace("ready_to_print.3mf", output_name), encoding="utf-8")
+        from presentation import render_poster, create_guide
+        render_poster(mesh, work / "print_image.png")
+        create_guide(mesh, work / "Instruction_Manual.pdf", summary, output_name)
         # Commit artifacts only after every requested deliverable has been generated.
-        for name in (output_name, "preview.png", "settings_summary.json", "PRINT_GUIDE.md"):
+        for name in (output_name, "preview.png", "settings_summary.json", "PRINT_GUIDE.md", "print_image.png", "Instruction_Manual.pdf"):
             shutil.copy2(work / name, outdir / name)
     return {"ok": True, "three_mf": str(output_3mf), "preview_png": str(outdir / "preview.png"),
             "settings_summary": str(outdir / "settings_summary.json"), "print_guide": str(outdir / "PRINT_GUIDE.md"),
+            "instruction_pdf": str(outdir / "Instruction_Manual.pdf"), "print_image_png": str(outdir / "print_image.png"),
             "printer_started": False, "preview_source": preview_source}
 
 
