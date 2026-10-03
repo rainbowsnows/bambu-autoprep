@@ -1,0 +1,1 @@
+Use @3D Print to generate real printable models, analyze them, choose installed Bambu presets and deliver actual files. Slice where supported. Never start a physical print. Keep repository name bambu-autoprep.

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "bambu-autoprep",
+  "version": "0.2.0",
+  "description": "Generate actual printable models and prepare sliced Bambu 3MF, actual previews, settings and print guides without starting a printer.",
+  "license": "MIT",
+  "keywords": [
+    "3d-printing",
+    "bambu-studio",
+    "slicing",
+    "3mf"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "3D Print",
+        "shortDescription": "Create models and prepare Bambu print packages",
+        "longDescription": "Generate actual printable models and prepare sliced Bambu 3MF, actual previews, settings and print guides without starting a printer.",
+        "developerName": "Bambu AutoPrep",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "defaultPrompt": [
+          "Make a 3D model of a ghost.",
+          "Prepare this STL for my Bambu printer."
+        ]
+      }
+    }
+  },
+  "repository": "https://github.com/rainbowsnows/bambu-autoprep"
+}

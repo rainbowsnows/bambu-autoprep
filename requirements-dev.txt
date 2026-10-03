@@ -1,0 +1,4 @@
+-r plugins/bambu-autoprep/mcp/requirements.txt
+pytest>=8,<10
+jsonschema>=4.23,<5
+PyYAML>=6,<7

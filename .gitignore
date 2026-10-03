@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+plugins/bambu-autoprep/mcp/config.json
+output/
+*.3mf
+*.stl
+*.obj

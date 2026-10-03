@@ -1,0 +1,11 @@
+{
+  "bambu_studio_path": "",
+  "profile_root": "",
+  "slice_timeout_seconds": 600,
+  "defaults": {
+    "machine_profile": "Bambu Lab P2S 0.4 nozzle",
+    "process_profile_hint": "0.20mm Standard P2S 0.4 nozzle",
+    "filament_profile": "Bambu PLA Basic @BBL P2S",
+    "plate": "Textured PEI Plate"
+  }
+}
