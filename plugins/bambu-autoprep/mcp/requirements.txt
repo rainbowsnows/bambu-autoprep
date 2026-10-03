@@ -7,3 +7,4 @@ defusedxml>=0.7,<1
 lxml>=5,<7
 manifold3d>=3,<4
 scipy>=1.11,<2
+networkx>=3,<4

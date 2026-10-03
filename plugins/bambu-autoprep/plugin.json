@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "bambu-autoprep",
-  "version": "0.2.0",
-  "description": "Generate actual printable models and prepare sliced Bambu 3MF, actual previews, settings and print guides without starting a printer.",
+  "version": "0.3.0",
+  "description": "Generate actual printable models and unsliced 3MF downloads for manual Bambu slicing, or sliced projects where connected. Never starts a printer.",
   "license": "MIT",
   "keywords": [
     "3d-printing",
@@ -15,7 +15,7 @@
       "interface": {
         "displayName": "3D Print",
         "shortDescription": "Create models and prepare Bambu print packages",
-        "longDescription": "Generate actual printable models and prepare sliced Bambu 3MF, actual previews, settings and print guides without starting a printer.",
+        "longDescription": "Generate actual printable models and unsliced 3MF downloads for manual Bambu slicing, or sliced projects where connected. Never starts a printer.",
         "developerName": "Bambu AutoPrep",
         "category": "Productivity",
         "capabilities": [

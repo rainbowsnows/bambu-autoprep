@@ -23,11 +23,33 @@ Existing models: `@3D Print Prepare this uploaded STL for printing.`
 - STL, OBJ and 3MF analysis; optional STEP/STP conversion with CadQuery.
 - Geometry previews rendered from the actual model, conservative repair and printability observations.
 - Exact installed Bambu machine/process/filament profile discovery, bounded process overrides and local slicing.
-- A sliced 3MF, preview PNG, settings_summary.json and PRINT_GUIDE.md after successful slicing.
+- An unsliced geometry 3MF download package without Bambu Studio; optional sliced 3MF with connected local Bambu Studio.
 
 The MCP tools never send a print job or start a physical printer. Review and start prints manually.
 
-## One-time computer setup
+## Default workflow: download and slice yourself
+
+Version 0.3.0 adds a core unsliced 3MF exporter. The normal workflow is:
+
+**Describe/upload a model → receive unsliced 3MF + STL + actual preview + recommended settings + print guide → download on your computer → open/import in Bambu Studio → select installed profiles/apply recommendations → Slice plate → review → manually print.**
+
+The geometry 3MF includes millimetre dimensions and a thumbnail. It does **not** embed Bambu profiles or automatically apply the recommended settings. Do not treat it as a preconfigured Bambu project or already sliced file.
+
+No Bambu installation or Bambu MCP connection is needed to generate this unsliced package. The ChatGPT/Work host still needs Python/file execution or working local MCP tools, the bundled dependencies, and download delivery. The GitHub marketplace alone cannot provide those capabilities on an unsupported host.
+
+On a Python-capable host:
+
+`python -m pip install -r plugins/bambu-autoprep/mcp/requirements.txt`
+
+`python plugins/bambu-autoprep/mcp/unsliced.py --template ghost --output-dir output`
+
+Or for an uploaded file:
+
+`python plugins/bambu-autoprep/mcp/unsliced.py --model input.stl --output-dir output`
+
+The output folder contains model_unsliced.3mf, printable_model.stl, preview.png, settings_summary.json and PRINT_GUIDE.md.
+
+## Optional automatic Bambu slicing: one-time computer setup
 
 Bambu Studio and Python 3.10 or newer must be installed on the computer running the MCP server.
 
@@ -46,7 +68,7 @@ Private configuration can live outside the repository using the `BAMBU_AUTOPREP_
 
 STEP/STP additionally needs `python -m pip install cadquery`. This optional route has not been tested here.
 
-**iPad/cloud limitation:** local stdio runs on a computer. ChatGPT Work on an iPad cannot reach that computer merely by installing a GitHub marketplace. A supported authenticated remote MCP bridge and downloadable-file delivery would be needed; this repository does not deploy that bridge or contain a registered remote app connection.
+**iPad/cloud:** unsliced export can run in a supported Work host with Python/file execution and dependencies, without connecting your computer. Automatic Bambu slicing still requires a supported local host or authenticated remote bridge; this repository does not deploy that bridge.
 
 ## Settings and limitations
 
@@ -64,9 +86,9 @@ Previews may be embedded project thumbnails or actual input-geometry renders. A 
 
 `python -m pytest -q`
 
-Portable manifest/MCP schemas and marketplace paths validate. Fourteen automated tests pass, including real template meshes/renders and a **fixture slicer** testing package creation and failure handling. The fixture is not Bambu Studio.
+Portable manifest/MCP schemas and marketplace paths validate. Seventeen automated tests pass, including real template meshes/renders and a **fixture slicer** testing package creation and failure handling. The fixture is not Bambu Studio.
 
-Real Bambu Studio slicing, P2S installed-profile compatibility, opening exported projects in Bambu Studio, installed ChatGPT invocation, optional STEP conversion and an end-to-end iPad workflow remain untested.
+Unsliced output is checked with ZIP/XML validation, independent trimesh re-import, preserved dimensions/closed volume, a real ghost CLI export, and guards against Bambu/subprocess calls. Real Bambu Studio opening/slicing, P2S installed-profile compatibility, installed ChatGPT invocation, optional STEP conversion and an end-to-end iPad workflow remain untested.
 
 ## Repository layout
 

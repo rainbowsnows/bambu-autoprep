@@ -371,6 +371,10 @@ def generate_model(template: str, output_dir: str, parameters: Optional[dict[str
             "analysis": analyze_model(str(model)), "printer_started": False}
 
 
+from unsliced import prepare_unsliced_3mf
+mcp.tool()(prepare_unsliced_3mf)
+
+
 @mcp.tool()
 def health_check() -> dict[str, Any]:
     """Discover local slicer/profiles. No physical printer connection."""
