@@ -31,7 +31,7 @@ def test_unsliced_roundtrip_without_bambu(tmp_path, monkeypatch):
     mesh.apply_translation([17, 13, 50])
     mesh.export(model)
     original = model.read_bytes()
-    result = server.prepare_unsliced_3mf(str(model), str(tmp_path / 'package'), use='functional')
+    result = server.prepare_unsliced_3mf(str(model), str(tmp_path / 'package'), use='functional', embed_settings=False)
     assert result['status'] == 'unsliced' and result['requires_manual_slicing']
     assert not result['settings_embedded'] and not result['printer_started']
     assert model.read_bytes() == original

@@ -7,3 +7,5 @@ output/
 *.3mf
 *.stl
 *.obj
+
+!plugins/bambu-autoprep/assets/p2s-0.4-pla-basic.3mf

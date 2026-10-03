@@ -192,8 +192,15 @@ def flatten_profile(path: Path, folder: Path, cache=None, visiting=None) -> dict
             )
         merged.update(flatten_profile(parent, folder, cache, visiting))
 
+    index = build_name_index(folder)
+    for include_name in data.get("include", []):
+        included = index.get(include_name)
+        if included is None:
+            raise FileNotFoundError(f'Cannot resolve included profile "{include_name}"')
+        merged.update(flatten_profile(included, folder, cache, visiting))
     merged.update(data)
     merged.pop("inherits", None)
+    merged.pop("include", None)
     visiting.remove(key)
     cache[key] = dict(merged)
     return merged

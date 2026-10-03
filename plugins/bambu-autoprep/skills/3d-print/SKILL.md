@@ -7,9 +7,11 @@ description: Generate actual printable CAD or mesh geometry from descriptions or
 
 ## Default: download, open, slice manually
 
-Unless the user explicitly requests automatic Bambu slicing, deliver an **unsliced geometry 3MF** with STL, actual preview, settings recommendations and manual print guide. Bambu Studio or a Bambu MCP connection is not required for this export.
+Unless the user explicitly requests automatic slicing or geometry-only export, deliver an **unsliced Bambu project with settings embedded**, plus STL, actual preview, settings summary and manual print guide. Bambu Studio or a Bambu connection is not required on the host for this export.
 
-Use `generate_model` or task-specific geometry, then `prepare_unsliced_3mf`. Pass explicit hardware/material choices when provided. It writes geometry and a thumbnail, **not embedded Bambu profiles/process settings**. Tell the user to select installed profiles and apply the separate recommendations, slice and review, then manually start printing. Never describe this output as already sliced or settings already applied.
+Use `generate_model` or task-specific geometry, then `prepare_unsliced_3mf` with `embed_settings=true` (default). Its bundled official Bambu-created reference supports **P2S, 0.4 mm nozzle, Bambu PLA Basic, Textured PEI** by default. It applies layer height, walls, top/bottom layers, infill, supports, brim and seam to the project; remaining settings preserve vendor defaults. The summary must say `settings_embedded: true`. Deliver it as a PROJECT: geometry-only import discards settings. The user opens the project, reviews hardware/placement/settings, slices, reviews toolpaths, and starts printing manually.
+
+Honour explicit hardware choices. Other printer/nozzle/material configurations require a matching single-object unsliced Bambu project template via `project_template_path`/`--project-template`. Never substitute the bundled PLA profile for PETG, flexible, outdoor or high-temperature requirements. Ask for a matching template only when necessary; never claim all hardware combinations are bundled. For a geometry-only request use `embed_settings=false`/`--geometry-only`, and explain recommendations then need manual application.
 
 If local MCP is unavailable but the Work host provides Python/file execution, run the bundled script using the plugin's actual installed path:
 

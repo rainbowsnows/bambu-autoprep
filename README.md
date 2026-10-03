@@ -12,7 +12,7 @@ If your Plugins screen offers **Upload plugin archive** instead of marketplace i
 
 `python scripts/package_plugin.py`
 
-Then upload `3D-Print-0.3.1.zip` through that option. This ZIP contains the skills and Python tools, without an active local stdio MCP configuration. It uses supported Work host Python/file execution for unsliced export. The GitHub source retains the local Bambu MCP configuration. To package that configuration for a compatible local host, use `python scripts/package_plugin.py --local-mcp`.
+Then upload `3D-Print-0.4.0.zip` through that option. This ZIP contains the skills and Python tools, without an active local stdio MCP configuration. It uses supported Work host Python/file execution for unsliced export. The GitHub source retains the local Bambu MCP configuration. To package that configuration for a compatible local host, use `python scripts/package_plugin.py --local-mcp`.
 
 Archive-installed plugins are a snapshot: a later GitHub commit does not update them automatically; upload an updated archive through the host's supported update flow.
 
@@ -31,17 +31,21 @@ Existing models: `@3D Print Prepare this uploaded STL for printing.`
 - STL, OBJ and 3MF analysis; optional STEP/STP conversion with CadQuery.
 - Geometry previews rendered from the actual model, conservative repair and printability observations.
 - Exact installed Bambu machine/process/filament profile discovery, bounded process overrides and local slicing.
-- An unsliced geometry 3MF download package without Bambu Studio; optional sliced 3MF with connected local Bambu Studio.
+- An unsliced Bambu project with saved settings without Bambu Studio; optional sliced 3MF with connected local Bambu Studio.
 
 The MCP tools never send a print job or start a physical printer. Review and start prints manually.
 
 ## Default workflow: download and slice yourself
 
-Version 0.3.0 adds a core unsliced 3MF exporter. The normal workflow is:
+Version 0.4.0 saves the selected settings inside an unsliced Bambu project. The normal workflow is:
 
-**Describe/upload a model → receive unsliced 3MF + STL + actual preview + recommended settings + print guide → download on your computer → open/import in Bambu Studio → select installed profiles/apply recommendations → Slice plate → review → manually print.**
+**Describe/upload a model → receive unsliced 3MF + STL + actual preview + recommended settings + print guide → download on your computer → open as a PROJECT in Bambu Studio → review saved hardware/settings → Slice plate → review → manually print.**
 
-The geometry 3MF includes millimetre dimensions and a thumbnail. It does **not** embed Bambu profiles or automatically apply the recommended settings. Do not treat it as a preconfigured Bambu project or already sliced file.
+The default Bambu project contains actual geometry, selected print settings, vendor machine/material defaults and a thumbnail. It is still **unsliced**. Open as a **project** to load settings; importing geometry alone discards them.
+
+The bundled reference was generated with official Bambu Studio 02.08.02.61 using P2S, 0.4 mm nozzle, Bambu PLA Basic and Textured PEI Plate. Other printer/nozzle/material choices require a matching unsliced single-object project template (`--project-template` or `project_template_path`); unsupported hardware is rejected rather than substituted. The optional `--geometry-only` mode retains the earlier geometry-only route with separate recommendations.
+
+Bambu Studio here successfully reopened/exported the ghost project with every chosen setting retained and sliced it without a physical printer connection. Your exact installed Bambu version, UI flow and ChatGPT account invocation are still untested.
 
 No Bambu installation or Bambu MCP connection is needed to generate this unsliced package. The ChatGPT/Work host still needs Python/file execution or working local MCP tools, the bundled dependencies, and download delivery. The GitHub marketplace alone cannot provide those capabilities on an unsupported host.
 
@@ -94,9 +98,9 @@ Previews may be embedded project thumbnails or actual input-geometry renders. A 
 
 `python -m pytest -q`
 
-Portable manifest/MCP schemas and marketplace paths validate. Seventeen automated tests pass, including real template meshes/renders and a **fixture slicer** testing package creation and failure handling. The fixture is not Bambu Studio.
+Portable manifest/MCP schemas and marketplace paths validate. Automated geometry, native project and settings-preservation tests pass, including real template meshes/renders and a **fixture slicer** testing package creation and failure handling. The fixture is not Bambu Studio.
 
-Unsliced output is checked with ZIP/XML validation, independent trimesh re-import, preserved dimensions/closed volume, a real ghost CLI export, and guards against Bambu/subprocess calls. Real Bambu Studio opening/slicing, P2S installed-profile compatibility, installed ChatGPT invocation, optional STEP conversion and an end-to-end iPad workflow remain untested.
+Unsliced output is checked with ZIP/XML validation, independent trimesh re-import, preserved dimensions/closed volume, a real ghost CLI export, and guards against Bambu/subprocess calls. Official Bambu Studio 02.08.02.61 reopening/settings re-export and slicing were tested on the default P2S/0.4/PLA ghost. Installed ChatGPT invocation, your computer UI/version, other templates, optional STEP conversion and an end-to-end iPad workflow remain untested.
 
 ## Repository layout
 
@@ -106,3 +110,5 @@ Unsliced output is checked with ZIP/XML validation, independent trimesh re-impor
 - `plugins/bambu-autoprep/skills/3d-print/SKILL.md`: workflow instructions
 - `plugins/bambu-autoprep/mcp/`: model generation and Bambu integration
 - `tests/`, `schemas/`, `scripts/`: validation
+
+Vendor template provenance and license: `plugins/bambu-autoprep/assets/README.md`.

@@ -18,6 +18,7 @@ def package(destination=None, local_mcp=False):
     files += sorted((PLUGIN / 'skills').rglob('*.md'))
     files += sorted((PLUGIN / 'mcp').glob('*.py'))
     files += [PLUGIN / 'mcp/requirements.txt']
+    files += sorted(p for p in (PLUGIN / 'assets').rglob('*') if p.is_file())
     if local_mcp:
         files += [PLUGIN / 'mcp.json', PLUGIN / 'mcp/config.example.json']
     with zipfile.ZipFile(destination, 'w', zipfile.ZIP_DEFLATED) as archive:

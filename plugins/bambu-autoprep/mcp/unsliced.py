@@ -58,8 +58,9 @@ def export_unsliced(mesh, destination: Path, preview: Path | None = None):
 def prepare_unsliced_3mf(model_path: str, output_dir: str, use: str = "general",
                          output_name: str = "model_unsliced.3mf",
                          printer: str | None = None, nozzle_mm: float = 0.4,
-                         filament: str = "PLA", plate: str = "Textured PEI Plate") -> dict:
-    """Create a geometry-only 3MF package; recommendations must be applied manually."""
+                         filament: str = "PLA", plate: str = "Textured PEI Plate",
+                         embed_settings: bool = True, project_template_path: str | None = None) -> dict:
+    """Create an unsliced Bambu project with applied settings, or optional geometry-only export."""
     import json
     import shutil
     import tempfile
@@ -86,7 +87,6 @@ def prepare_unsliced_3mf(model_path: str, output_dir: str, use: str = "general",
         analysis = analyze_model(str(stl))
         preview = work / "preview.png"
         render_geometry_preview(mesh, preview)
-        export_unsliced(mesh, work / output_name, preview)
         x, y, z = analysis["dimensions_mm"]
         recommended = {
             "layer_height": round(min(0.2, nozzle_mm * 0.5), 3),
@@ -97,30 +97,37 @@ def prepare_unsliced_3mf(model_path: str, output_dir: str, use: str = "general",
             "enable_support": analysis["support_candidate_area_mm2"] > 1,
             "brim_type": "outer_only" if z / max(min(x, y), 0.01) > 3 else "no_brim",
             "seam_position": "aligned"}
-        summary = {"status": "unsliced", "settings_embedded": False,
+        embedded = {}
+        if embed_settings:
+            from bambu_project import export_bambu_project
+            embedded = export_bambu_project(mesh, work / output_name, preview, recommended,
+                printer, nozzle_mm, filament, plate, project_template_path)
+        else:
+            export_unsliced(mesh, work / output_name, preview)
+        summary = {"status": "unsliced", "settings_embedded": embed_settings,
                    "requires_manual_slicing": True, "printer_started": False,
                    "requested_hardware": {"printer": printer, "nozzle_mm": nozzle_mm,
                                           "filament": filament, "plate": plate},
-                   "recommended_settings": recommended, "analysis": analysis,
+                   "recommended_settings": recommended, "embedded_profiles": embedded, "analysis": analysis,
                    "preview_source": "actual_geometry_not_toolpaths",
-                   "profile_note": "Select exact installed profiles in Bambu Studio; recommendations are not applied in this core 3MF."}
+                   "profile_note": "Settings are saved inside the Bambu project; open as a project to load them." if embed_settings else "Geometry only: apply recommendations manually."}
         (work / "settings_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-        guide = ("# Print Guide — unsliced model\n\n"
-                 "This 3MF contains actual geometry in millimetres and a thumbnail. It has no sliced toolpaths or embedded Bambu settings.\n\n"
-                 f"1. Download {output_name} and open/import it in Bambu Studio as a model. If asked whether to import geometry, choose that option.\n"
-                 "2. Select your actual printer, installed nozzle, filament and build plate using installed profiles.\n"
-                 "3. Apply the recommendations in settings_summary.json; retain vendor temperature, machine and G-code defaults.\n"
-                 "4. Check dimensions, plate fit, first-layer contact, orientation, wall thickness and support placement. Arrange on the plate.\n"
-                 "5. Press Slice plate. Review the sliced preview and resolve any errors. Save the Bambu project if desired.\n"
-                 "6. Start the print manually only after review. This plugin never starts a physical printer.\n\n"
-                 "Support estimates may include bridges; inspect them. Fit, strength and tiny details need review.\n")
+        guide = "# Print Guide — unsliced model\n\n"
+        guide += ("This unsliced Bambu project contains actual geometry, saved settings and a thumbnail. No sliced toolpaths.\n\n" if embed_settings else "This geometry 3MF has no embedded settings or sliced toolpaths.\n\n")
+        guide += f"1. Download {output_name}. Open it as a PROJECT in Bambu Studio to retain saved settings; geometry-only import discards settings.\n"
+        guide += "2. Confirm the saved printer, nozzle, filament and plate match your actual equipment.\n"
+        guide += ("3. Settings are already saved: review settings_summary.json. Retain vendor machine and material defaults.\n" if embed_settings else "3. Apply the recommendations in settings_summary.json.\n")
+        guide += "4. Check dimensions, plate fit, first-layer contact, orientation, thin walls and supports.\n"
+        guide += "5. Press Slice plate. Review the sliced preview and resolve any errors.\n"
+        guide += "6. Start the print manually after review. This plugin never starts a physical printer.\n\n"
+        guide += "Support estimates may include bridges. Fit, strength and tiny details need review.\n"
         (work / "PRINT_GUIDE.md").write_text(guide, encoding="utf-8")
         for name in (output_name, "printable_model.stl", "preview.png", "settings_summary.json", "PRINT_GUIDE.md"):
             shutil.copy2(work / name, outdir / name)
     return {"ok": True, "three_mf": str(outdir / output_name),
             "model_file": str(outdir / "printable_model.stl"), "preview_png": str(outdir / "preview.png"),
             "settings_summary": str(outdir / "settings_summary.json"), "print_guide": str(outdir / "PRINT_GUIDE.md"),
-            "status": "unsliced", "settings_embedded": False, "requires_manual_slicing": True,
+            "status": "unsliced", "settings_embedded": embed_settings, "requires_manual_slicing": True,
             "printer_started": False}
 
 
@@ -135,13 +142,19 @@ def main():
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--parameters", default="{}", help="Template millimetre dimensions as JSON")
     parser.add_argument("--use", default="decorative", choices=["general", "decorative", "functional", "fit"])
+    parser.add_argument("--geometry-only", action="store_true", help="Export geometry without Bambu settings")
+    parser.add_argument("--project-template", help="Matching unsliced single-object Bambu project")
+    parser.add_argument("--printer")
+    parser.add_argument("--nozzle-mm", type=float, default=0.4)
+    parser.add_argument("--filament", default="PLA")
+    parser.add_argument("--plate", default="Textured PEI Plate")
     args = parser.parse_args()
     # Reuse library functions, without mcp.run(), Bambu discovery or subprocess slicing.
     from server import generate_model, prepare_unsliced_3mf
     model = args.model
     if args.template:
         model = generate_model(args.template, args.output_dir, json.loads(args.parameters))["model_file"]
-    print(json.dumps(prepare_unsliced_3mf(model, args.output_dir, use=args.use), indent=2))
+    print(json.dumps(prepare_unsliced_3mf(model, args.output_dir, use=args.use, embed_settings=not args.geometry_only, project_template_path=args.project_template, printer=args.printer, nozzle_mm=args.nozzle_mm, filament=args.filament, plate=args.plate), indent=2))
 
 
 if __name__ == "__main__":
