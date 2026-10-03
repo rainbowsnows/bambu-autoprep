@@ -23,7 +23,8 @@ def validate():
     assert (ROOT/source/'plugin.json').is_file()
     manifest=json.loads((PLUGIN/'plugin.json').read_text())
     assert manifest['extensions']['com.openai']['interface']['displayName']=='3D Print'
-    skill=(PLUGIN/'skills/bambu-autoprep/SKILL.md').read_text()
+    assert len(manifest['extensions']['com.openai']['interface']['shortDescription']) <= 30
+    skill=(PLUGIN/'skills/3d-print/SKILL.md').read_text()
     front=yaml.safe_load(skill.split('---',2)[1])
     assert front['name']=='3d-print' and front['description']
     server=json.loads((PLUGIN/'mcp.json').read_text())['mcpServers']['bambu-autoprep']

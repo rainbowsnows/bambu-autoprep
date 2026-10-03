@@ -18,6 +18,10 @@ from unsliced import CORE, REL, export_unsliced
 
 
 def test_unsliced_roundtrip_without_bambu(tmp_path, monkeypatch):
+    # Initialize font discovery before blocking subprocesses used by slicing.
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot
     def forbidden(*args, **kwargs):
         raise AssertionError('Offline export must not invoke Bambu or subprocesses')
     monkeypatch.setattr(server, 'find_bambu_executable', forbidden)

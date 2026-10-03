@@ -8,6 +8,14 @@ On a ChatGPT/Codex surface that supports GitHub marketplace imports, use this re
 
 https://github.com/rainbowsnows/bambu-autoprep
 
+If your Plugins screen offers **Upload plugin archive** instead of marketplace imports, generate the personal upload ZIP with:
+
+`python scripts/package_plugin.py`
+
+Then upload `3D-Print-0.3.1.zip` through that option. This ZIP contains the skills and Python tools, without an active local stdio MCP configuration. It uses supported Work host Python/file execution for unsliced export. The GitHub source retains the local Bambu MCP configuration. To package that configuration for a compatible local host, use `python scripts/package_plugin.py --local-mcp`.
+
+Archive-installed plugins are a snapshot: a later GitHub commit does not update them automatically; upload an updated archive through the host's supported update flow.
+
 Select **3D Print** from the imported marketplace. Installing the marketplace distributes the plugin; it does not install Bambu Studio or deploy a slicing service.
 
 Try:
@@ -95,6 +103,6 @@ Unsliced output is checked with ZIP/XML validation, independent trimesh re-impor
 - `.agents/plugins/marketplace.json`: marketplace catalog
 - `plugins/bambu-autoprep/plugin.json`: plugin manifest and display metadata
 - `plugins/bambu-autoprep/mcp.json`: local MCP configuration
-- `plugins/bambu-autoprep/skills/bambu-autoprep/SKILL.md`: workflow instructions
+- `plugins/bambu-autoprep/skills/3d-print/SKILL.md`: workflow instructions
 - `plugins/bambu-autoprep/mcp/`: model generation and Bambu integration
 - `tests/`, `schemas/`, `scripts/`: validation
