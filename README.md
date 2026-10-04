@@ -12,7 +12,7 @@ If your Plugins screen offers **Upload plugin archive** instead of marketplace i
 
 `python scripts/package_plugin.py`
 
-Then upload `3D-Print-0.6.0.zip` through that option. This ZIP contains the skills and Python tools, without an active local stdio MCP configuration. It uses supported Work host Python/file execution for unsliced export. The GitHub source retains the local Bambu MCP configuration. To package that configuration for a compatible local host, use `python scripts/package_plugin.py --local-mcp`.
+Then upload `3D-Print-0.7.0.zip` through that option. This ZIP contains the skills and Python tools, without an active local stdio MCP configuration. It uses supported Work host Python/file execution for unsliced export. The GitHub source retains the local Bambu MCP configuration. To package that configuration for a compatible local host, use `python scripts/package_plugin.py --local-mcp`.
 
 Archive-installed plugins are a snapshot: a later GitHub commit does not update them automatically; upload an updated archive through the host's supported update flow.
 
@@ -37,7 +37,7 @@ The MCP tools never send a print job or start a physical printer. Review and sta
 
 ## Default workflow: download and slice yourself
 
-Version 0.5.0 saves the selected settings inside an unsliced Bambu project. The normal workflow is:
+The default workflow saves the selected settings inside an unsliced Bambu project. The normal workflow is:
 
 **Describe/upload a model → receive unsliced 3MF + STL + actual preview + recommended settings + print guide → download on your computer → open as a PROJECT in Bambu Studio → review saved hardware/settings → Slice plate → review → manually print.**
 
@@ -78,7 +78,7 @@ Bambu Studio and Python 3.10 or newer must be installed on the computer running 
 
 Private configuration can live outside the repository using the `BAMBU_AUTOPREP_CONFIG` environment variable. Do not commit credentials or personal configuration.
 
-STEP/STP additionally needs `python -m pip install cadquery`. This optional route has not been tested here.
+STEP/STP additionally needs `python -m pip install -r plugins/bambu-autoprep/mcp/requirements-cad.txt`. CadQuery STL/STEP export and STEP import are tested locally.
 
 **iPad/cloud:** unsliced export can run in a supported Work host with Python/file execution and dependencies, without connecting your computer. Automatic Bambu slicing still requires a supported local host or authenticated remote bridge; this repository does not deploy that bridge.
 
@@ -113,13 +113,13 @@ Unsliced output is checked with ZIP/XML validation, independent trimesh re-impor
 
 Vendor template provenance and license: `plugins/bambu-autoprep/assets/README.md`.
 
-## Preview and guide style (0.5.0)
+## Preview and guide style (0.7.0)
 
 Actual geometry is rendered in orthographic teal CAD views on a cream background, with a dark green uppercase title, two labelled views, real dimensions and an honest illustration footer. No unrelated concept image or invented assembly state is used. Both sides show the same geometry; the script does not infer removed lids or usage props from a single mesh.
 
-The default two-page PDF follows the compact print-and-use guide style: dimension strip, actual-model illustration, settings table, numbered print steps, finishing/use steps and pale green notes. `guide_style: "editorial"` uses the roomier manual palette with white paper and warm note boxes. Instructions are delivered only as the illustrated PDF; no extra Markdown or text guide is generated.
+The default two-page PDF follows the compact print-and-use guide style: dimension strip, actual-model illustration, settings table, numbered print steps, finishing/use steps and pale green notes. `guide_style: "editorial"` uses a separate three-page manual: overview, print setup with a full-width settings table, and use. It has white paper, large sentence-case headings, green numbered circles and warm beige notes. Instructions are delivered only as the illustrated PDF; no extra Markdown or text guide is generated.
 
-Supply `--presentation '{"title":"Ghost","subtitle":"A small desk decoration","use_steps":["Place on a stable shelf."],"guide_style":"compact"}'` or the MCP `presentation` object for task-specific text. Allowed fields: title, subtitle, up to four use_steps, use_note, guide_style (compact/editorial). Write use steps from the actual design, never fabricate fit, assembly, extra parts, slicing estimates or physical testing. Long instructions that exceed the layout are rejected instead of clipped. Other objects can use this presentation pipeline after actual geometry generation.
+Supply `--presentation '{"title":"Ghost","subtitle":"A small desk decoration","use_steps":["Place on a stable shelf."],"guide_style":"compact"}'` or the MCP `presentation` object for task-specific text. Allowed fields: title, subtitle, overview, requirements, use_heading, up to four use_steps (text or heading/body objects), use_note, guide_style (compact/editorial). Write use steps from the actual design, never fabricate fit, assembly, extra parts, slicing estimates or physical testing. Long instructions wrap onto numbered continuation pages. The renderer uses per-pixel depth to avoid false overlaps in hollow or concave models. Other objects can use this presentation pipeline after actual geometry generation.
 
 Output additionally includes `Instruction_Manual.pdf`. Automatic-slicing packages also include `print_image.png` separately from the slicer preview, preserving the distinction between geometry and toolpaths. Exact pixel identity with reference images is not promised: the object, dimensions, view and instructions change with the actual model.
 
@@ -130,3 +130,12 @@ ChatGPT translates descriptions into task-specific CAD/mesh geometry rather than
 Read `skills/3d-print/design-spec.md` for the JSON schema examples. Run `python plugins/bambu-autoprep/mcp/unsliced.py --design design.json --output-dir output --use functional --presentation '{"title":"My custom model","use_steps":["Use the actual printed part as described."]}'`. No image-generation substitute is used. `--model` accepts geometry created with full CAD or another actually connected 3D tool. For full CAD/STEP install `python -m pip install -r plugins/bambu-autoprep/mcp/requirements-cad.txt` and call `design.export_cadquery` from a host geometry script.
 
 This is broader model generation, not a guarantee to produce any imaginable geometry accurately. Complex organic likenesses may require an external mesh generator (not bundled); exact fits need dimensions; large multipart models need multiple packages. Declared minimum features are design intent, not measured certification. User-account invocation, external generators, other hardware and physical fit/printing remain untested. Existing printer/material/template limits remain unchanged.
+
+## Release 0.7.0 audit
+
+- Compared and visually checked both PDF layouts and the actual CAD poster against the supplied style references. Text remains model-specific; no extra text/Markdown instruction guide.
+- Unsliced settings use explicit choices, then private `unsliced_defaults` (or `defaults`), then the bundled preset. Configure printer/machine_profile, nozzle_mm, filament/filament_profile, plate and project_template_path. Other hardware still requires a matching template.
+- Use `process_overrides` (CLI `--process-overrides`) for safe model-specific layer/wall/support/seam choices. Advanced machine, temperature, firmware and G-code changes remain blocked. Effective saved process settings are included in the summary.
+- The sliced workflow now also returns the printable STL, accepts the same presentation metadata and explicit plate, and returns slicing diagnostics. The PDF distinguishes sliced, unsliced and geometry-only output correctly.
+- Automated tests cover custom geometry, STL/OBJ/3MF/STEP, preserved native settings, configured defaults, file status, guide pagination, actual hardware labels, rendering order, package creation and no printer-start operations. Visual checks use actual generated geometry.
+- No new physical print or installed ChatGPT/account end-to-end test was performed. Actual Bambu reopening/slicing evidence above is from the earlier default-profile validation; this update's sliced pipeline tests use a fixture.

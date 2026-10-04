@@ -1,9 +1,9 @@
-"""Reference-inspired CAD posters and illustrated PDF guides from actual geometry."""
+"""Reference-matched layouts using the actual printable geometry and saved settings."""
 from pathlib import Path
-import math
-import textwrap
 import tempfile
 from xml.sax.saxutils import escape
+
+from cad_preview import render_view
 
 BG = '#F7F9F6'
 INK = '#153F37'
@@ -13,57 +13,71 @@ PALE = '#EAF3EE'
 
 
 def metadata(value=None):
-    value = value or {}
+    value = {} if value is None else value
     if not isinstance(value, dict):
         raise ValueError('Presentation metadata must be an object')
-    allowed = {'title', 'subtitle', 'use_steps', 'use_note', 'guide_style'}
-    if set(value) - allowed:
+    limits = {'title': 160, 'subtitle': 240, 'overview': 600,
+              'requirements': 350, 'use_note': 500, 'use_heading': 100}
+    if set(value) - (set(limits) | {'use_steps', 'guide_style'}):
         raise ValueError('Unknown presentation metadata field')
-    for key in ('title', 'subtitle', 'use_note'):
-        if key in value and (not isinstance(value[key], str) or len(value[key]) > 500):
-            raise ValueError(f'{key} must be text of at most 500 characters')
+    for key, limit in limits.items():
+        if key in value and (not isinstance(value[key], str) or len(value[key]) > limit):
+            raise ValueError(f'{key} must be text of at most {limit} characters')
     steps = value.get('use_steps', [])
-    if not isinstance(steps, list) or len(steps) > 4 or any(not isinstance(s, str) or len(s) > 500 for s in steps):
-        raise ValueError('Supply at most four use steps, each at most 500 characters')
+    if not isinstance(steps, list) or len(steps) > 4:
+        raise ValueError('Supply at most four concise use steps')
+    for step in steps:
+        if isinstance(step, str) and len(step) <= 500:
+            continue
+        if isinstance(step, dict) and set(step) == {'heading', 'body'}:
+            if all(isinstance(step[k], str) and len(step[k]) <= limit
+                   for k, limit in [('heading', 100), ('body', 500)]):
+                continue
+        raise ValueError('A use step must be text or an object with heading and body')
     if value.get('guide_style', 'compact') not in ('compact', 'editorial'):
         raise ValueError('guide_style must be compact or editorial')
-    return value
-
-
-def render_view(mesh, path, azimuth=-65):
-    import matplotlib
-    matplotlib.use('Agg')
-    import matplotlib.pyplot as plt
-    from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-    import numpy as np
-    fig = plt.figure(figsize=(6, 6), facecolor=BG)
-    ax = fig.add_axes([0, 0, 1, 1], projection='3d', facecolor=BG)
-    # Use every triangle: face sampling can create false holes in a preview.
-    ax.add_collection3d(Poly3DCollection(mesh.triangles, facecolors=TEAL,
-        linewidths=0, shade=True, zsort='average'))
-    low, high = mesh.bounds
-    center = (low + high) / 2
-    half = max(float(np.max(high-low)) * .56, .001)
-    for setter, c in zip((ax.set_xlim, ax.set_ylim, ax.set_zlim), center):
-        setter(c-half, c+half)
-    ax.set_box_aspect((1, 1, 1))
-    ax.set_proj_type('ortho')
-    ax.view_init(elev=26, azim=azimuth)
-    ax.set_axis_off()
-    fig.savefig(path, dpi=150, facecolor=BG)
-    plt.close(fig)
+    return dict(value)
 
 
 def font(size, bold=False):
     from PIL import ImageFont
     import matplotlib.font_manager as fm
-    return ImageFont.truetype(fm.findfont(fm.FontProperties(family='DejaVu Sans', weight='bold' if bold else 'normal')), size)
+    return ImageFont.truetype(fm.findfont(fm.FontProperties(
+        family='DejaVu Sans', weight='bold' if bold else 'normal')), size)
 
 
-def fitted_text(draw, xy, value, max_width, size, fill=INK, bold=False):
-    while size > 15 and draw.textlength(value, font=font(size, bold)) > max_width:
-        size -= 1
-    draw.text(xy, value, font=font(size, bold), fill=fill)
+def _wrapped(draw, value, width, face):
+    lines = []
+    for paragraph in value.splitlines() or ['']:
+        line = ''
+        for word in paragraph.split():
+            candidate = (line + ' ' + word).strip()
+            if draw.textlength(candidate, font=face) <= width:
+                line = candidate
+                continue
+            if line:
+                lines.append(line)
+            line = ''
+            for char in word:
+                if draw.textlength(line + char, font=face) > width and line:
+                    lines.append(line)
+                    line = ''
+                line += char
+        lines.append(line)
+    return lines
+
+
+def text_block(draw, value, x, y, width, height, size, fill=INK, bold=False):
+    for candidate in range(size, 14, -1):
+        face = font(candidate, bold)
+        lines = _wrapped(draw, value, width, face)
+        leading = round(candidate*1.3)
+        if len(lines)*leading <= height:
+            for line in lines:
+                draw.text((x, y), line, font=face, fill=fill)
+                y += leading
+            return y
+    raise ValueError('Presentation text does not fit; use a shorter title or subtitle')
 
 
 def render_poster(mesh, destination, details=None):
@@ -71,17 +85,18 @@ def render_poster(mesh, destination, details=None):
     info = metadata(details)
     canvas = Image.new('RGB', (1800, 1280), BG)
     draw = ImageDraw.Draw(canvas)
-    fitted_text(draw, (75, 55), info.get('title', 'PRINTABLE MODEL').upper(), 1650, 52, bold=True)
+    title_bottom = text_block(draw, info.get('title', 'PRINTABLE MODEL').upper(),
+                             75, 52, 1650, 135, 52, bold=True)
     subtitle = info.get('subtitle', 'Actual CAD geometry | Two views of the printable model')
-    fitted_text(draw, (75, 140), subtitle, 1650, 28, MUTED)
+    text_block(draw, subtitle, 75, title_bottom+8, 1650, 75, 28, MUTED)
     with tempfile.TemporaryDirectory() as tmp:
         for i, angle in enumerate((-65, 115)):
             path = Path(tmp) / f'view{i}.png'
-            render_view(mesh, path, angle)
+            render_view(mesh, path, angle, size=780)
             with Image.open(path) as view:
-                canvas.paste(view.resize((800, 800)), (65 + 865*i, 220))
-            draw.text((85 + 865*i, 1040), ('FRONT VIEW', 'REVERSE VIEW')[i], font=font(28, True), fill=INK)
-            draw.text((85 + 865*i, 1085), 'Same printable geometry. Colour is illustrative.', font=font(21), fill=MUTED)
+                canvas.paste(view, (72+865*i, 246))
+            draw.text((85+865*i, 1040), ('FRONT VIEW', 'REVERSE VIEW')[i], font=font(28, True), fill=INK)
+            draw.text((85+865*i, 1085), 'Actual printable part. Colour is illustrative.', font=font(21), fill=MUTED)
     draw.line((75, 1155, 1725, 1155), fill='#D2E0D9', width=2)
     dimensions = ' × '.join(f'{float(v):.1f}' for v in mesh.extents) + ' mm | Model dimensions'
     draw.text((75, 1176), dimensions, font=font(27), fill=INK)
@@ -89,8 +104,79 @@ def render_poster(mesh, destination, details=None):
     canvas.save(destination)
 
 
+def _value(value, default='Vendor default'):
+    if isinstance(value, list):
+        return ', '.join(str(v) for v in value) if value else default
+    return default if value is None or value == '' else str(value)
+
+
+def _enabled(value):
+    if isinstance(value, list):
+        value = value[0] if value else None
+    if str(value).lower() in ('true', '1', 'on'):
+        return 'On'
+    if str(value).lower() in ('false', '0', 'off'):
+        return 'Off'
+    return 'Vendor default'
+
+
+def guide_data(summary):
+    """Normalize both exporters; never describe recommendations as saved settings."""
+    settings = summary.get('effective_process') or summary.get('recommended_settings') or {}
+    profiles = summary.get('embedded_profiles') or {}
+    hardware = summary.get('requested_hardware') or {}
+    printer = profiles.get('printer_profile') or hardware.get('printer') or summary.get('machine_profile')
+    nozzle = profiles.get('nozzle_mm') or hardware.get('nozzle_mm') or summary.get('nozzle_mm')
+    filament = profiles.get('filament_profile') or hardware.get('filament') or summary.get('filament_profile')
+    material = _value(filament, 'Confirm material').split(' @')[0]
+    plate = _value(hardware.get('plate') or summary.get('plate'), 'Confirm plate')
+    nozzle_text = f'{_value(nozzle)} mm' if nozzle is not None else 'Confirm nozzle'
+    layer = _value(settings.get('layer_height'))
+    if 'layer_height' in settings:
+        layer += ' mm'
+    walls = _value(settings.get('wall_loops'))
+    infill = _value(settings.get('sparse_infill_density'))+' / '+_value(settings.get('sparse_infill_pattern'))
+    shells = _value(settings.get('top_shell_layers'))+' / '+_value(settings.get('bottom_shell_layers'))
+    supports = _enabled(settings.get('enable_support'))
+    brim = _value(settings.get('brim_type')).replace('_', ' ')
+    seam = _value(settings.get('seam_position')).replace('_', ' ')
+    status = summary.get('status', 'unsliced')
+    embedded = bool(summary.get('settings_embedded', status == 'sliced'))
+    rows = [('Printer / nozzle', _value(printer, 'Confirm printer')+' / '+nozzle_text),
+            ('Material', material), ('Build plate', plate), ('Layer height', layer),
+            ('Walls', walls), ('Infill', infill), ('Top / bottom', shells),
+            ('Supports', supports), ('Brim', brim), ('Seam', seam)]
+    wide_rows = [('Printer / nozzle', rows[0][1]), ('Material / plate', material+' / '+plate),
+                 ('Layer / walls / infill', layer+' / '+walls+' walls / '+infill),
+                 ('Top / bottom layers', shells), ('Supports / brim', supports+' / '+brim), ('Seam', seam)]
+    if not embedded:
+        opening = 'Open '+project_name_placeholder()+' in Bambu Studio. This is a geometry-only file: choose matching hardware profiles and apply the recommendations in settings_summary.json before slicing.'
+    else:
+        opening = 'Open '+project_name_placeholder()+' in Bambu Studio as a PROJECT to load its saved settings. Keep the intended scale and orientation.'
+    review = 'Confirm printer, nozzle, filament and plate. Choose the correct spool or AMS slot. If hardware or material changes, select matching profiles and slice again.'
+    if status == 'sliced':
+        final_step = ('Review the sliced plate', 'Inspect first-layer contact, walls, supports and the saved toolpaths. Slice again after any changes. Start the physical print manually only after review.')
+        status_note = 'Sliced project: toolpaths are included. Review them in Bambu Studio before manually starting the print.'
+    else:
+        final_step = ('Slice plate, then review', 'Click Slice plate. Inspect the first layer, walls, supports and toolpaths. Start the physical print manually only after review.')
+        status_note = ('Unsliced Bambu project: print settings are saved. Slice plate on your computer before printing.' if embedded else
+                       'Geometry-only 3MF: settings are recommendations, not saved in this file. Apply them before slicing.')
+    return {'rows': rows, 'wide_rows': wide_rows, 'embedded': embedded, 'status': status,
+            'material': material, 'plate': plate, 'status_note': status_note,
+            'steps': [('Open the project' if embedded else 'Open and apply settings', opening),
+                      ('Confirm your equipment', review), final_step]}
+
+
+def project_name_placeholder():
+    return '{project_file}'
+
+
 def create_guide(mesh, destination, summary, project_name, details=None):
-    """Two A4 pages: real model/settings, then finishing and model-specific use."""
+    """Compact green two-page guide or white editorial three-page manual.
+
+    Long task-specific text flows onto numbered continuation pages. The footer,
+    paragraph and table measurements are shared to prevent clipping/overlap.
+    """
     from reportlab.pdfgen import canvas
     from reportlab.lib.colors import HexColor
     from reportlab.lib.styles import ParagraphStyle
@@ -100,93 +186,176 @@ def create_guide(mesh, destination, summary, project_name, details=None):
     from reportlab.pdfbase.ttfonts import TTFont
     import matplotlib.font_manager as fm
     for face, weight in [('GuideSans', 'normal'), ('GuideSans-Bold', 'bold')]:
-        pdfmetrics.registerFont(TTFont(face, fm.findfont(fm.FontProperties(family='DejaVu Sans', weight=weight))))
+        if face not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(face, fm.findfont(fm.FontProperties(family='DejaVu Sans', weight=weight))))
     info = metadata(details)
     editorial = info.get('guide_style') == 'editorial'
-    title = info.get('title', 'Printable model')
-    use_steps = info.get('use_steps') or ['Use only for the purpose stated in your model request. For an uploaded model with no usage information, assembly and use instructions need the design description.']
-    pages = 3 if len(use_steps) > 2 or sum(map(len, use_steps)) > 400 else 2
-    c = canvas.Canvas(str(destination), pagesize=(595.28, 841.89))
-    c.setTitle(title + ' - Print and use guide')
+    title = info.get('title') or 'Printable model'
+    subtitle = info.get('subtitle') or 'Print and use guide | Actual printable geometry'
+    overview = info.get('overview') or info.get('subtitle') or 'Use this model for the purpose described in your request. The illustrations show the actual geometry included in the download.'
+    requirements = info.get('requirements') or 'The printed part or parts. Use additional hardware only when specified by the design.'
+    use_steps = info.get('use_steps') or ['For an uploaded model with no usage description, assembly and use instructions require the design description.']
+    use_steps = [(s['heading'], s['body']) if isinstance(s, dict) else
+                 ('Use the model' if len(use_steps) == 1 else f'Use step {i+1}', s)
+                 for i, s in enumerate(use_steps)]
+    data = guide_data(summary)
+    print_steps = [(h, b.replace(project_name_placeholder(), project_name)) for h, b in data['steps']]
     width, height = 595.28, 841.89
     ink, muted = HexColor(INK), HexColor(MUTED)
-    style = ParagraphStyle('body', fontName='GuideSans', fontSize=10, leading=14, textColor=ink)
-    def para(text, x, top, w, size=10, bold=False):
-        s = ParagraphStyle('p', parent=style, fontName='GuideSans-Bold' if bold else 'GuideSans', fontSize=size, leading=size*1.4)
-        p = Paragraph(escape(str(text)), s)
-        _, h = p.wrap(w, height)
+    paper = '#FFFFFF' if editorial else BG
+    note_colour = '#F6ECD8' if editorial else PALE
+
+    class NumberedCanvas(canvas.Canvas):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.frames = []
+        def showPage(self):
+            self.frames.append(dict(self.__dict__))
+            self._startPage()
+        def save(self):
+            self.showPage()
+            count = len(self.frames)
+            for state in self.frames:
+                self.__dict__.update(state)
+                self.setStrokeColor(HexColor('#D2E0D9')); self.line(42, 40, 553, 40)
+                self.setFillColor(muted); self.setFont('GuideSans', 7)
+                self.drawString(42, 24, 'CAD illustrations. Physical print and fit have not been tested.')
+                self.drawRightString(553, 24, f'{self._pageNumber} / {count}')
+                super().showPage()
+            super().save()
+
+    c = NumberedCanvas(str(destination), pagesize=(width, height))
+    c.setTitle(title+' - Print and use guide')
+    c.setAuthor('3D Print')
+    def paragraph(text, w, size=10, bold=False, colour=ink):
+        style = ParagraphStyle('p', fontName='GuideSans-Bold' if bold else 'GuideSans',
+                               fontSize=size, leading=size*1.38, textColor=colour)
+        p = Paragraph(escape(str(text)), style)
+        _, h = p.wrap(w, height*10)
+        return p, h
+    def para(text, x, top, w, size=10, bold=False, colour=ink):
+        p, h = paragraph(text, w, size, bold, colour)
+        if top-h < 53:
+            raise ValueError('Guide text would overlap its footer')
         p.drawOn(c, x, top-h)
         return top-h
-    def header(page, subtitle):
-        c.setFillColor(HexColor('#FFFFFF' if editorial else BG)); c.rect(0, 0, width, height, fill=1, stroke=0)
-        c.setFillColor(muted); c.setFont('GuideSans-Bold', 8)
-        c.drawString(42, 800, '3D PRINT / PRINT AND USE GUIDE' if editorial else '3D PRINT')
-        bottom = para(title if editorial else title.upper(), 42, 777, 511, 25, True)
-        para(subtitle, 42, bottom-10, 511, 10)
-        c.setStrokeColor(HexColor('#D2E0D9')); c.line(42, 40, 553, 40)
-        c.setFillColor(muted); c.setFont('GuideSans', 8)
-        c.drawString(42, 24, 'CAD illustrations. Physical print and fit have not been tested.')
-        c.drawRightString(553, 24, f'{page} / {pages}')
+    def header(heading, sub=subtitle):
+        c.setFillColor(HexColor(paper)); c.rect(0, 0, width, height, fill=1, stroke=0)
+        c.setFillColor(muted); c.setFont('GuideSans-Bold', 7.5)
+        c.drawString(42, 802, '3D PRINT / PRINT AND USE GUIDE')
+        size = 25
+        while paragraph(heading, 511, size, True)[1] > 92 and size > 17:
+            size -= 1
+        bottom = para(heading, 42, 780, 511, size, True)
+        return para(sub, 42, bottom-8, 511, 10, colour=muted)-18
     def callout(text, top):
-        color = '#F6ECD8' if editorial else PALE
-        p = Paragraph(escape(text), style); _, h = p.wrap(475, 1000)
-        c.setFillColor(HexColor(color)); c.roundRect(42, top-h-22, 511, h+22, 8, fill=1, stroke=0)
-        p.drawOn(c, 60, top-h-11)
-        return top-h-22
+        p, h = paragraph(text, 483, 9)
+        if top-h-24 < 53:
+            raise ValueError('Guide note would overlap its footer')
+        c.setFillColor(HexColor(note_colour)); c.roundRect(42, top-h-24, 511, h+24, 8, fill=1, stroke=0)
+        p.drawOn(c, 56, top-h-12)
+        return top-h-38
+    def step_height(heading, body):
+        return paragraph(heading, 477, 10, True)[1]+paragraph(body, 477, 9.5)[1]+19
     def step(number, heading, body, top):
-        c.setFillColor(HexColor('#507E73' if editorial else INK)); c.circle(53, top-10, 10, fill=1, stroke=0)
-        c.setFillColor(HexColor('#FFFFFF')); c.setFont('GuideSans-Bold', 10); c.drawCentredString(53, top-13.5, str(number))
-        bottom = para(heading, 76, top, 475, 11, True)
-        return para(body, 76, bottom-5, 475)-19
-    settings = summary.get('recommended_settings') or summary.get('effective_process') or {}
-    profiles = summary.get('embedded_profiles', {})
-    hardware = summary.get('requested_hardware', {})
-    rows = [('Layer height', str(settings.get('layer_height', 'Vendor default')) + ' mm'),
-            ('Walls', str(settings.get('wall_loops', 'Vendor default'))),
-            ('Infill', str(settings.get('sparse_infill_density', 'Vendor default')) + ' / ' + str(settings.get('sparse_infill_pattern', 'Vendor default'))),
-            ('Top / bottom', str(settings.get('top_shell_layers', 'Vendor default')) + ' / ' + str(settings.get('bottom_shell_layers', 'Vendor default'))),
-            ('Supports', ('On' if settings['enable_support'] else 'Off') if 'enable_support' in settings else 'Vendor default'),
-            ('Brim', str(settings.get('brim_type', 'Vendor default')).replace('_', ' ')),
-            ('Plate', str(hardware.get('plate') or summary.get('plate', 'See project'))),
-            ('Material', str(profiles.get('filament_profile') or hardware.get('filament') or summary.get('filament_profile', 'See project')))]
-    # Fixed regions with wrapped text prevent overlap for long profile identifiers.
-    header(1, info.get('subtitle', 'Open the project. Review the setup. Slice and print manually.'))
-    c.setFillColor(HexColor(PALE)); c.roundRect(42, 646, 511, 53, 10, fill=1, stroke=0)
-    for i, value in enumerate(mesh.extents):
-        para(f'{float(value):.1f} mm', 58+167*i, 685, 153, 16, True)
-        para(('Width / X', 'Depth / Y', 'Height / Z')[i], 58+167*i, 663, 150, 9)
-    with tempfile.TemporaryDirectory() as tmp:
-        view = Path(tmp)/'actual.png'; render_view(mesh, view)
-        c.drawImage(ImageReader(str(view)), 42, 400, 245, 245, preserveAspectRatio=True, mask='auto')
-        para('PRINT SETUP' + (' INCLUDED' if summary.get('settings_embedded') else ' / REVIEW'), 305, 628, 248, 11, True)
-        y = 599
-        for label, value in rows:
-            para(label, 305, y, 90, 9)
-            bottom = para(value, 399, y, 154, 9)
-            y = min(y-24, bottom-7)
-        para('Actual model. Illustrative teal colour.', 42, 399, 245, 8)
-        para('Time and material estimates are available after slicing. No estimates are invented.', 305, min(y, 393), 248, 9)
-        para('OPEN, SLICE, PRINT', 42, 357, 511, 13, True)
-        y = step(1, 'Open as a project', f'Open {project_name} in Bambu Studio as a PROJECT to load its saved settings. Geometry-only import discards settings.', 328)
-        y = step(2, 'Confirm your equipment', 'Check printer, nozzle, filament and plate. Choose the correct spool or AMS slot. Changing hardware or material requires matching profiles and a fresh slice.', y)
-        y = step(3, 'Slice and review before starting', 'Review scale, orientation, first-layer contact, walls and supports. Slice plate and inspect the toolpaths. Start the physical print manually.', y)
-        callout('Prepared digitally. The model image shows geometry, not sliced supports or toolpaths. This plugin never sends or starts a physical print.', min(y, 120))
-        c.showPage()
-        header(2, 'Finish the print, check fit, then use it for its intended purpose.')
-        c.drawImage(ImageReader(str(view)), 160, 443, 275, 275, preserveAspectRatio=True, mask='auto')
-        para('ACTUAL PRINTABLE MODEL', 42, 441, 511, 11, True)
-        para('The same geometry is shown here; no extra parts or assembly mechanisms are invented.', 42, 422, 511, 9)
-        y = step(1, 'Cool and remove', 'Let the plate and model cool. Remove the model carefully, then remove any supports, brim and loose strings. Check edges and small details.', 382)
-        y = step(2, 'Inspect the finished part', 'Check dimensions, cracks and weak areas. For fitted parts, try the fit gently without forcing. The first physical print still needs inspection.', y)
-        if pages == 3:
-            callout('Inspect the finished print before following the use and assembly steps on the next page.', min(y, 122))
+        c.setFillColor(HexColor('#507E73' if editorial else INK)); c.circle(52, top-9, 10, fill=1, stroke=0)
+        c.setFillColor(HexColor('#FFFFFF')); c.setFont('GuideSans-Bold', 9)
+        c.drawCentredString(52, top-12, str(number))
+        y = para(heading, 76, top, 477, 10, True)
+        return para(body, 76, y-5, 477, 9.5)-14
+    def ensure(top, needed, continuation):
+        if top-needed < 58:
             c.showPage()
-            header(3, 'Model-specific use and assembly')
-            y = 675
-        for i, body in enumerate(use_steps):
-            y = step(i+3, 'Use the model' if len(use_steps)==1 else f'Use step {i+1}', body, y)
-        # Longer task-specific instructions continue into a compact note region only when they fit.
-        if y < 105:
-            raise ValueError('Use instructions exceed the guide layout; shorten the four use steps')
-        callout(info.get('use_note', 'No physical testing is claimed. Confirm material and intended-use suitability before using the print. Follow any model-specific assembly and care instructions.'), min(y, 122))
+            return header(continuation, title+' | Continued')
+        return top
+    def steps(items, top, continuation):
+        for i, (heading, body) in enumerate(items, 1):
+            top = ensure(top, step_height(heading, body)+3, continuation)
+            top = step(i, heading, body, top)
+        return top
+    def note(text, top, continuation):
+        top = ensure(top, paragraph(text, 483, 9)[1]+30, continuation)
+        return callout(text, top)
+    def table(rows, x, top, w, ruled=False):
+        label_w = w*(.41 if ruled else .40)
+        for label, value in rows:
+            size = 9 if ruled else 8.5
+            h = max(paragraph(label, label_w-8, size)[1], paragraph(value, w-label_w, size, ruled)[1])
+            para(label, x, top, label_w-8, size, colour=muted)
+            para(value, x+label_w, top, w-label_w, size, ruled)
+            top -= h+9
+            if ruled:
+                c.setStrokeColor(HexColor('#D2E0D9')); c.line(x, top+4, x+w, top+4)
+        return top
+    def table_height(rows, w, ruled=False):
+        label_w = w*(.41 if ruled else .40)
+        size = 9 if ruled else 8.5
+        return sum(max(paragraph(k, label_w-8, size)[1], paragraph(v, w-label_w, size, ruled)[1])+9 for k, v in rows)
+    def image(path, x, top, w, h):
+        c.drawImage(ImageReader(str(path)), x, top-h, w, h, preserveAspectRatio=True, anchor='c', mask='auto')
+    def pair(front, back, top, h=210):
+        image(front, 42, top, 248, h); image(back, 305, top, 248, h)
+        para('FRONT VIEW', 42, top-h-7, 248, 8.5, True)
+        para('REVERSE VIEW', 305, top-h-7, 248, 8.5, True)
+        return top-h-39
+
+    default_note = 'Check the first physical print before use. Confirm material, dimensions and any fit requirements. No physical testing is claimed.'
+    finish = 'Let the plate and model cool. Remove the print carefully, then remove supports, brim and loose strings if present. Inspect edges and weak areas; try fitted parts gently without forcing.'
+    with tempfile.TemporaryDirectory() as tmp:
+        front, back = Path(tmp)/'front.png', Path(tmp)/'back.png'
+        render_view(mesh, front, size=620, background=paper)
+        render_view(mesh, back, 115, size=620, background=paper)
+        if editorial:
+            y = header(title)
+            y = callout(data['status_note'], y)
+            y = pair(front, back, y, 222)
+            y = para('How it works', 42, y, 511, 13, True)-8
+            y = para(overview, 42, y, 511, 10)-20
+            y = steps([('Check the size', 'The model dimensions are '+ ' × '.join(f'{float(v):.1f}' for v in mesh.extents)+' mm. Keep 100% scale for dimension-sensitive designs.'),
+                       ('Keep the files together', 'Download the 3MF, printable model, preview PNG, settings summary and this PDF. The next page contains the print setup.')], y, 'Before printing')
+            c.showPage()
+            y = header('Your model. Ready to prepare.', 'The saved project and the settings to review before printing.')
+            y = pair(front, back, y, 135)
+            y = para('Bambu settings '+('included' if data['embedded'] else 'to apply'), 42, y, 511, 13, True)-12
+            y = table(data['wide_rows'], 42, y, 511, True)-14
+            y = steps(print_steps, y, 'Open, review and print')
+            c.showPage()
+            y = header(info.get('use_heading', 'Using the printed model'), title+' | Finish, assemble and use')
+            y = pair(front, back, y, 210)
+            y = para(finish, 42, y, 511, 9.5)-20
+            y = steps(use_steps, y, 'Assemble and use')
+            note(info.get('use_note', default_note), y, 'Use and care')
+        else:
+            y = header(title.upper())
+            c.setFillColor(HexColor(PALE)); c.roundRect(42, y-53, 511, 53, 10, fill=1, stroke=0)
+            for i, value in enumerate(mesh.extents):
+                para(f'{float(value):.1f} mm', 58+167*i, y-9, 153, 16, True)
+                para(('Width / X', 'Depth / Y', 'Height / Z')[i], 58+167*i, y-33, 150, 8.5, colour=muted)
+            y -= 73
+            block_h = max(238, table_height(data['rows'], 248)+25)
+            image(front, 42, y, 245, min(block_h-18, 270))
+            para('Actual printable geometry.', 42, y-block_h+12, 245, 8, colour=muted)
+            para('PRINT SETUP'+(' INCLUDED' if data['embedded'] else ' / TO APPLY'), 305, y, 248, 11, True)
+            table(data['rows'], 305, y-23, 248)
+            y -= block_h+14
+            y = para('OPEN, REVIEW, PRINT' if data['status']=='sliced' else 'OPEN, SLICE, PRINT', 42, y, 511, 12, True)-14
+            y = steps(print_steps, y, 'Open, review and print')
+            note(data['status_note']+' This plugin never sends or starts a physical print.', y, 'Project status')
+            c.showPage()
+            y = header(title.upper(), 'Use guide | '+info.get('use_heading', 'Finish, assemble and use'))
+            top = y
+            image(back, 42, top, 245, 260)
+            y = para('WHAT YOU NEED', 310, y, 243, 11, True)-10
+            y = para(requirements, 310, y, 243, 9.5)-20
+            y = para('HOW IT WORKS', 310, y, 243, 11, True)-10
+            y = para(overview, 310, y, 243, 9.5)-20
+            y = para('SIZE AND MATERIAL', 310, y, 243, 11, True)-10
+            size_text = ' × '.join(f'{float(v):.1f}' for v in mesh.extents)+' mm. '+data['material']+'. Dimensions describe the supplied geometry.'
+            y = para(size_text, 310, y, 243, 9.5)
+            y = min(y, top-260)-22
+            y = ensure(y, 75, 'Finish, assemble and use')
+            y = para('ASSEMBLE AND USE', 42, y, 511, 12, True)-12
+            y = para(finish, 42, y, 511, 9.5)-18
+            y = steps(use_steps, y, 'Assemble and use')
+            note(info.get('use_note', default_note), y, 'Use and care')
         c.save()

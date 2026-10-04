@@ -416,8 +416,11 @@ def prepare_3mf(
     auto_arrange: bool = True,
     output_name: str = "ready_to_print.3mf",
     plate: str = "Textured PEI Plate",
+    presentation: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
     """Slice geometry with exact installed profiles. Never sends a job to a printer."""
+    from presentation import metadata, render_poster, create_guide
+    presentation = metadata(presentation)
     cfg = load_config()
     if Path(output_name).name != output_name or "/" in output_name or "\\" in output_name or not output_name.endswith(".3mf"):
         raise ValueError("output_name must be a plain .3mf filename")
@@ -429,7 +432,7 @@ def prepare_3mf(
         raise ValueError("Repair the non-watertight mesh before slicing")
     outdir = Path(output_dir).expanduser().resolve()
     outdir.mkdir(parents=True, exist_ok=True)
-    if model == outdir / output_name:
+    if model in {outdir / output_name, outdir / "printable_model.stl"}:
         raise ValueError("Output must not overwrite the input model")
     exe = find_bambu_executable(cfg.get("bambu_studio_path"))
     root = find_profile_root(exe, cfg.get("profile_root"))
@@ -459,7 +462,7 @@ def prepare_3mf(
     # Each run has a new directory: an earlier successful file cannot mask a failed export.
     with tempfile.TemporaryDirectory(prefix="bambu_autoprep_") as tmp:
         work = Path(tmp)
-        mesh.export(work / "geometry.stl")  # strips imported project settings and custom G-code
+        mesh.export(work / "printable_model.stl")  # strips imported project settings and custom G-code
         for name, data in (("machine", machine), ("process", process), ("filament", filament)):
             write_json(work / f"{name}.json", data)
         cmd = [str(exe), "--debug", "2", "--curr-bed-type", plate,
@@ -469,7 +472,7 @@ def prepare_3mf(
             cmd += ["--orient", "1"]
         cmd += ["--arrange", "1" if auto_arrange else "0", "--slice", "0",
                 "--outputdir", str(work), "--export-3mf", str(work / output_name),
-                str(work / "geometry.stl")]
+                str(work / "printable_model.stl")]
         proc = subprocess.run(cmd, cwd=str(work), capture_output=True, text=True,
                               timeout=int(cfg.get("slice_timeout_seconds", 600)), shell=False)
         exported = work / output_name
@@ -485,31 +488,37 @@ def prepare_3mf(
             from PIL import Image
             with Image.open(preview) as im:
                 im.verify()
-        summary = {"machine_profile": machine.get("name", machine_profile),
+        summary = {"status": "sliced", "settings_embedded": True, "requires_manual_slicing": False,
+                   "nozzle_mm": nozzle, "machine_profile": machine.get("name", machine_profile),
                    "process_profile": process.get("name", process_profile),
                    "filament_profile": filament.get("name", filament_profile),
                    "plate": plate, "overrides": process_overrides or {},
                    "effective_process": {k:process[k] for k in sorted(SAFE_PROCESS_KEYS) if k in process},
                    "dimensions_mm": mesh.extents.tolist(), "auto_orient": auto_orient,
                    "auto_arrange": auto_arrange, "preview_source": preview_source,
+                   "slicing_diagnostics": {"exit_code": proc.returncode,
+                       "stdout_tail": proc.stdout[-4000:], "stderr_tail": proc.stderr[-4000:]},
                    "printer_started": False, "validated": "3MF ZIP, model, and nonempty sliced G-code"}
         write_json(work / "settings_summary.json", summary)
-        from presentation import render_poster, create_guide
-        render_poster(mesh, work / "print_image.png")
-        create_guide(mesh, work / "Instruction_Manual.pdf", summary, output_name)
+        render_poster(mesh, work / "print_image.png", presentation)
+        create_guide(mesh, work / "Instruction_Manual.pdf", summary, output_name, presentation)
         # Commit artifacts only after every requested deliverable has been generated.
-        for name in (output_name, "preview.png", "settings_summary.json", "print_image.png", "Instruction_Manual.pdf"):
+        for name in (output_name, "printable_model.stl", "preview.png", "settings_summary.json", "print_image.png", "Instruction_Manual.pdf"):
             shutil.copy2(work / name, outdir / name)
     return {"ok": True, "three_mf": str(output_3mf), "preview_png": str(outdir / "preview.png"),
+            "model_file": str(outdir / "printable_model.stl"), "status": "sliced", "settings_embedded": True,
+            "requires_manual_slicing": False,
             "settings_summary": str(outdir / "settings_summary.json"),
             "instruction_pdf": str(outdir / "Instruction_Manual.pdf"), "print_image_png": str(outdir / "print_image.png"),
+            "slicing_diagnostics": summary["slicing_diagnostics"],
             "printer_started": False, "preview_source": preview_source}
 
 
 @mcp.tool()
 def prepare_print(model_path: str, output_dir: str, use: str = "general",
                   quality: str = "standard", machine_profile: Optional[str] = None,
-                  filament_profile: Optional[str] = None, process_profile: Optional[str] = None) -> dict[str, Any]:
+                  filament_profile: Optional[str] = None, process_profile: Optional[str] = None,
+                  plate: Optional[str] = None, presentation: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """Choose conservative settings for supplied orientation and create the complete print package.
 
     Fine/draft require an explicit exact installed process profile. Functional layer orientation
@@ -533,7 +542,7 @@ def prepare_print(model_path: str, output_dir: str, use: str = "general",
                        process_profile or cfg.get("process_profile_hint", ""),
                        filament_profile or cfg.get("filament_profile", ""),
                        process_overrides=overrides, auto_orient=False,
-                       plate=cfg.get("plate", "Textured PEI Plate"))
+                       plate=plate or cfg.get("plate", "Textured PEI Plate"), presentation=presentation)
 
 
 if __name__ == "__main__":

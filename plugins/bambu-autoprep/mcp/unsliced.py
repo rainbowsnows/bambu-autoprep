@@ -57,17 +57,25 @@ def export_unsliced(mesh, destination: Path, preview: Path | None = None):
 
 def prepare_unsliced_3mf(model_path: str, output_dir: str, use: str = "general",
                          output_name: str = "model_unsliced.3mf",
-                         printer: str | None = None, nozzle_mm: float = 0.4,
-                         filament: str = "PLA", plate: str = "Textured PEI Plate",
+                         printer: str | None = None, nozzle_mm: float | None = None,
+                         filament: str | None = None, plate: str | None = None,
                          embed_settings: bool = True, project_template_path: str | None = None,
-                         presentation: dict | None = None) -> dict:
+                         presentation: dict | None = None, process_overrides: dict | None = None) -> dict:
     """Create an unsliced Bambu project with applied settings, or optional geometry-only export."""
     from presentation import metadata, render_poster, create_guide
     presentation = metadata(presentation)
     import json
     import shutil
     import tempfile
-    from server import load_mesh, analyze_model, render_geometry_preview
+    from server import load_mesh, analyze_model, load_config, safe_apply_process_overrides
+    config = load_config()
+    defaults = config.get("unsliced_defaults", config.get("defaults", {}))
+    printer = printer or defaults.get("printer") or defaults.get("machine_profile")
+    nozzle_mm = nozzle_mm if nozzle_mm is not None else float(defaults.get("nozzle_mm", 0.4))
+    filament = filament or defaults.get("filament") or defaults.get("filament_profile") or "PLA"
+    plate = plate or defaults.get("plate", "Textured PEI Plate")
+    project_template_path = project_template_path or defaults.get("project_template_path")
+    safe_apply_process_overrides({}, process_overrides or {})
     if use not in {"general", "decorative", "functional", "fit"}:
         raise ValueError("Unknown intended use")
     if not math.isfinite(nozzle_mm) or not 0.2 <= nozzle_mm <= 1.0:
@@ -100,6 +108,11 @@ def prepare_unsliced_3mf(model_path: str, output_dir: str, use: str = "general",
             "enable_support": analysis["support_candidate_area_mm2"] > 1,
             "brim_type": "outer_only" if z / max(min(x, y), 0.01) > 3 else "no_brim",
             "seam_position": "aligned"}
+        if recommended["brim_type"] == "outer_only":
+            recommended["brim_width"] = 5
+        recommended.update(process_overrides or {})
+        if float(recommended["layer_height"]) > .8 * nozzle_mm:
+            raise ValueError("Layer height exceeds 80% of the selected nozzle diameter")
         embedded = {}
         if embed_settings:
             from bambu_project import export_bambu_project
@@ -112,6 +125,12 @@ def prepare_unsliced_3mf(model_path: str, output_dir: str, use: str = "general",
                    "requested_hardware": {"printer": printer, "nozzle_mm": nozzle_mm,
                                           "filament": filament, "plate": plate},
                    "recommended_settings": recommended, "embedded_profiles": embedded, "analysis": analysis,
+                   "effective_process": embedded.get("effective_settings", {}),
+                   "settings_decisions": {"orientation": "Supplied orientation, placed on the bed; inspect before slicing",
+                       "quality": "Conservative layer height unless explicitly overridden",
+                       "strength": "Walls and infill chosen from intended use: " + use,
+                       "supports": "Overhang candidates in the actual geometry; inspect bridges and removal access",
+                       "advanced_settings": "Unchanged vendor defaults for all settings outside the bounded process overrides"},
                    "preview_source": "actual_geometry_not_toolpaths",
                    "profile_note": "Settings are saved inside the Bambu project; open as a project to load them." if embed_settings else "Geometry only: apply recommendations manually."}
         (work / "settings_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
@@ -141,10 +160,11 @@ def main():
     parser.add_argument("--geometry-only", action="store_true", help="Export geometry without Bambu settings")
     parser.add_argument("--project-template", help="Matching unsliced single-object Bambu project")
     parser.add_argument("--printer")
-    parser.add_argument("--nozzle-mm", type=float, default=0.4)
-    parser.add_argument("--filament", default="PLA")
-    parser.add_argument("--plate", default="Textured PEI Plate")
-    parser.add_argument("--presentation", default="{}", help="JSON: title, subtitle, use_steps, use_note, guide_style")
+    parser.add_argument("--nozzle-mm", type=float)
+    parser.add_argument("--filament")
+    parser.add_argument("--plate")
+    parser.add_argument("--process-overrides", default="{}", help="JSON of bounded safe process settings")
+    parser.add_argument("--presentation", default="{}", help="JSON: title, subtitle, overview, requirements, use_steps, use_note, guide_style")
     args = parser.parse_args()
     # Reuse library functions, without mcp.run(), Bambu discovery or subprocess slicing.
     from server import generate_model, prepare_unsliced_3mf
@@ -163,7 +183,7 @@ def main():
         uses = {"ghost": "Place the finished ghost on a stable flat surface as a decoration.", "cable-holder": "Place the holder on a flat desk and lay a suitably sized cable in its open groove. This is not a snap clip.", "phone-stand": "Place the stand on a stable desk, seat the phone behind the front lip and check balance before letting go."}
         presentation.setdefault("use_steps", [uses[args.template]])
         model = generate_model(args.template, args.output_dir, json.loads(args.parameters))["model_file"]
-    print(json.dumps(prepare_unsliced_3mf(model, args.output_dir, use=args.use, embed_settings=not args.geometry_only, project_template_path=args.project_template, printer=args.printer, nozzle_mm=args.nozzle_mm, filament=args.filament, plate=args.plate, presentation=presentation), indent=2))
+    print(json.dumps(prepare_unsliced_3mf(model, args.output_dir, use=args.use, embed_settings=not args.geometry_only, project_template_path=args.project_template, printer=args.printer, nozzle_mm=args.nozzle_mm, filament=args.filament, plate=args.plate, presentation=presentation, process_overrides=json.loads(args.process_overrides)), indent=2))
 
 
 if __name__ == "__main__":

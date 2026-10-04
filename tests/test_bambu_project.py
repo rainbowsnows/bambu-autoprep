@@ -66,3 +66,27 @@ def test_vendor_include_fragments_are_preserved(tmp_path):
     assert result['wall_loops'] == '3'
     assert result['name'] == 'child'
     assert 'inherits' not in result and 'include' not in result
+
+
+def test_configured_defaults_and_explicit_process_choices(tmp_path, monkeypatch):
+    model = tmp_path/'input.stl'
+    trimesh.creation.box([20,20,15]).export(model)
+    monkeypatch.setattr(server, 'load_config', lambda: {'unsliced_defaults':{
+        'printer':'P2S', 'nozzle_mm':.4, 'filament':'Bambu PLA Basic', 'plate':'Smooth PEI Plate'}})
+    result=server.prepare_unsliced_3mf(str(model),str(tmp_path/'out'),
+        process_overrides={'wall_loops':5,'layer_height':.16,'support_style':'default','seam_position':'back'})
+    with zipfile.ZipFile(result['three_mf']) as z:
+        config=json.loads(z.read('Metadata/project_settings.config'))
+    assert config['curr_bed_type']=='Smooth PEI Plate'
+    assert config['wall_loops']=='5' and config['layer_height']=='0.16'
+    assert config['seam_position']=='back'
+    summary=json.loads(Path(result['settings_summary']).read_text())
+    assert summary['embedded_profiles']['nozzle_mm']==.4
+    assert summary['effective_process']['support_style']=='default'
+    # User choices override defaults; unavailable hardware never silently falls back.
+    with pytest.raises(ValueError,match='filament does not match'):
+        server.prepare_unsliced_3mf(str(model),str(tmp_path/'bad'),filament='PETG')
+    with pytest.raises(ValueError):
+        server.prepare_unsliced_3mf(str(model),str(tmp_path/'bad'),process_overrides={'machine_start_gcode':'G28'})
+    with pytest.raises(ValueError,match='80%'):
+        server.prepare_unsliced_3mf(str(model),str(tmp_path/'bad'),process_overrides={'layer_height':.4})

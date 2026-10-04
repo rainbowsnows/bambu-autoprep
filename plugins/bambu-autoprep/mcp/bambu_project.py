@@ -15,7 +15,7 @@ def export_bambu_project(mesh, destination, preview, recommended, printer=None,
                          nozzle_mm=0.4, filament='PLA', plate='Textured PEI Plate',
                          template_path=None):
     """Preserve template hardware settings; embed bounded process settings, no toolpaths."""
-    from server import safe_apply_process_overrides, normalize_name
+    from server import safe_apply_process_overrides, normalize_name, SAFE_PROCESS_KEYS
     from defusedxml import ElementTree as SafeET
     template = Path(template_path).expanduser().resolve() if template_path else TEMPLATE
     if not template.is_file() or template.stat().st_size > 50 * 1024 * 1024:
@@ -114,4 +114,5 @@ def export_bambu_project(mesh, destination, preview, recommended, printer=None,
         archive.write(preview, 'Metadata/thumbnail.png')
     return {'printer_profile': config['printer_settings_id'], 'process_profile': config['print_settings_id'],
             'filament_profile': actual_filament, 'bambu_version': config['version'],
-            'settings_embedded': True, 'effective_settings': {k: config[k] for k in recommended}}
+            'nozzle_mm': actual_nozzle, 'plate': plate,
+            'settings_embedded': True, 'effective_settings': {k: config[k] for k in sorted(SAFE_PROCESS_KEYS) if k in config}}

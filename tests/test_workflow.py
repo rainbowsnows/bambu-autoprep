@@ -73,12 +73,24 @@ def installation(tmp_path,monkeypatch):
 def test_complete_package_without_printer(installation,tmp_path):
     exe,model=installation
     out=tmp_path/'out'
-    result=server.prepare_print(str(model),str(out))
+    result=server.prepare_print(str(model),str(out),plate='Smooth PEI Plate',
+        presentation={'title':'Uploaded holder','guide_style':'editorial','use_steps':[
+            {'heading':'Use the holder','body':'Place it on a stable desk.'}]})
     assert result['ok'] and not result['printer_started']
     assert result['preview_source']=='input_geometry_not_toolpaths'
-    for key in ('three_mf','preview_png','instruction_pdf','settings_summary'): assert Path(result[key]).is_file()
+    for key in ('three_mf','model_file','print_image_png','preview_png','instruction_pdf','settings_summary'): assert Path(result[key]).is_file()
+    assert result['status']=='sliced' and not result['requires_manual_slicing']
+    assert result['slicing_diagnostics']['exit_code']==0
     summary=json.loads(Path(result['settings_summary']).read_text())
     assert summary['effective_process']['wall_loops']=='3'
+    assert summary['nozzle_mm']==.4 and summary['plate']=='Smooth PEI Plate'
+    from pypdf import PdfReader
+    pdf=PdfReader(result['instruction_pdf'])
+    assert len(pdf.pages)==3
+    text='\n'.join(p.extract_text() for p in pdf.pages)
+    assert 'Uploaded holder' in text and 'Place it on a stable desk.' in text
+    assert 'toolpaths are included' in text
+    assert not (out/'PRINT_GUIDE.md').exists()
     exe.write_text('#!/usr/bin/env python3\n')
     with pytest.raises(RuntimeError):server.prepare_print(str(model),str(out))
 
