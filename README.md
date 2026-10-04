@@ -12,7 +12,7 @@ If your Plugins screen offers **Upload plugin archive** instead of marketplace i
 
 `python scripts/package_plugin.py`
 
-Then upload `3D-Print-0.5.1.zip` through that option. This ZIP contains the skills and Python tools, without an active local stdio MCP configuration. It uses supported Work host Python/file execution for unsliced export. The GitHub source retains the local Bambu MCP configuration. To package that configuration for a compatible local host, use `python scripts/package_plugin.py --local-mcp`.
+Then upload `3D-Print-0.6.0.zip` through that option. This ZIP contains the skills and Python tools, without an active local stdio MCP configuration. It uses supported Work host Python/file execution for unsliced export. The GitHub source retains the local Bambu MCP configuration. To package that configuration for a compatible local host, use `python scripts/package_plugin.py --local-mcp`.
 
 Archive-installed plugins are a snapshot: a later GitHub commit does not update them automatically; upload an updated archive through the host's supported update flow.
 
@@ -26,7 +26,7 @@ Existing models: `@3D Print Prepare this uploaded STL for printing.`
 
 ## What is implemented
 
-- Deterministic, connected, watertight STL geometry for a ghost, desk cable holder and phone stand.
+- General custom CAD/mesh generation guided by ChatGPT, with a bounded JSON design engine and optional full CadQuery CAD. Ghost, cable holder and phone stand remain examples, not the object limit.
 - A skill guiding task-specific CAD/mesh generation for other objects when the host provides suitable execution tools. No general neural text-to-3D service is bundled.
 - STL, OBJ and 3MF analysis; optional STEP/STP conversion with CadQuery.
 - Geometry previews rendered from the actual model, conservative repair and printability observations.
@@ -100,7 +100,7 @@ Previews may be embedded project thumbnails or actual input-geometry renders. A 
 
 Portable manifest/MCP schemas and marketplace paths validate. Automated geometry, native project and settings-preservation tests pass, including real template meshes/renders and a **fixture slicer** testing package creation and failure handling. The fixture is not Bambu Studio.
 
-Unsliced output is checked with ZIP/XML validation, independent trimesh re-import, preserved dimensions/closed volume, a real ghost CLI export, and guards against Bambu/subprocess calls. Official Bambu Studio 02.08.02.61 reopening/settings re-export and slicing were tested on the default P2S/0.4/PLA ghost. Installed ChatGPT invocation, your computer UI/version, other templates, optional STEP conversion and an end-to-end iPad workflow remain untested.
+Unsliced output is checked with ZIP/XML validation, independent trimesh re-import, preserved dimensions/closed volume, a real ghost CLI export, and guards against Bambu/subprocess calls. Official Bambu Studio 02.08.02.61 reopening/settings re-export and slicing were tested on the default P2S/0.4/PLA ghost. Installed ChatGPT invocation, your computer UI/version, other hardware templates and an end-to-end iPad workflow remain untested. Custom design operations, multipart layout, real text holes, organic closed meshes, and CadQuery STL/STEP export/import were tested locally in 0.6.0.
 
 ## Repository layout
 
@@ -122,3 +122,11 @@ The default two-page PDF follows the compact print-and-use guide style: dimensio
 Supply `--presentation '{"title":"Ghost","subtitle":"A small desk decoration","use_steps":["Place on a stable shelf."],"guide_style":"compact"}'` or the MCP `presentation` object for task-specific text. Allowed fields: title, subtitle, up to four use_steps, use_note, guide_style (compact/editorial). Write use steps from the actual design, never fabricate fit, assembly, extra parts, slicing estimates or physical testing. Long instructions that exceed the layout are rejected instead of clipped. Other objects can use this presentation pipeline after actual geometry generation.
 
 Output additionally includes `Instruction_Manual.pdf`. Automatic-slicing packages also include `print_image.png` separately from the slicer preview, preserving the distinction between geometry and toolpaths. Exact pixel identity with reference images is not promised: the object, dimensions, view and instructions change with the actual model.
+
+## Custom objects (0.6.0)
+
+ChatGPT translates descriptions into task-specific CAD/mesh geometry rather than choosing only three preset models. The bundled `generate_custom_model` MCP tool supports custom Boolean shapes, polygon extrusions with holes, revolved profiles, swept profiles, extruded text, custom triangle meshes and smooth organic blobs. Optional full CadQuery supports task-specific Python CAD, including fillets, shells and lofts. All generation must run on a supported execution host; installing a ZIP alone does not provide compute or an external generation service.
+
+Read `skills/3d-print/design-spec.md` for the JSON schema examples. Run `python plugins/bambu-autoprep/mcp/unsliced.py --design design.json --output-dir output --use functional --presentation '{"title":"My custom model","use_steps":["Use the actual printed part as described."]}'`. No image-generation substitute is used. `--model` accepts geometry created with full CAD or another actually connected 3D tool. For full CAD/STEP install `python -m pip install -r plugins/bambu-autoprep/mcp/requirements-cad.txt` and call `design.export_cadquery` from a host geometry script.
+
+This is broader model generation, not a guarantee to produce any imaginable geometry accurately. Complex organic likenesses may require an external mesh generator (not bundled); exact fits need dimensions; large multipart models need multiple packages. Declared minimum features are design intent, not measured certification. User-account invocation, external generators, other hardware and physical fit/printing remain untested. Existing printer/material/template limits remain unchanged.

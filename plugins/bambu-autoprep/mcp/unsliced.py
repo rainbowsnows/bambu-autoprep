@@ -134,6 +134,7 @@ def main():
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--template", choices=["ghost", "cable-holder", "phone-stand"])
     source.add_argument("--model", help="STL/OBJ/3MF/STEP input")
+    source.add_argument("--design", help="Custom design JSON file; not limited to named templates")
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--parameters", default="{}", help="Template millimetre dimensions as JSON")
     parser.add_argument("--use", default="decorative", choices=["general", "decorative", "functional", "fit"])
@@ -149,6 +150,14 @@ def main():
     from server import generate_model, prepare_unsliced_3mf
     model = args.model
     presentation = json.loads(args.presentation)
+    if args.design:
+        from design import generate_custom_model
+        path = Path(args.design)
+        if path.stat().st_size > 2_000_000:
+            raise ValueError("Design JSON exceeds size limit")
+        design = json.loads(path.read_text())
+        presentation.setdefault("title", design.get("name", "Custom model"))
+        model = generate_custom_model(design, args.output_dir, presentation)["model_file"]
     if args.template:
         presentation.setdefault("title", args.template.replace("-", " ").title())
         uses = {"ghost": "Place the finished ghost on a stable flat surface as a decoration.", "cable-holder": "Place the holder on a flat desk and lay a suitably sized cable in its open groove. This is not a snap clip.", "phone-stand": "Place the stand on a stable desk, seat the phone behind the front lip and check balance before letting go."}

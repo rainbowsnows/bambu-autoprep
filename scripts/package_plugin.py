@@ -17,7 +17,7 @@ def package(destination=None, local_mcp=False):
     files = [PLUGIN / 'plugin.json', ROOT / 'LICENSE']
     files += sorted((PLUGIN / 'skills').rglob('*.md'))
     files += sorted((PLUGIN / 'mcp').glob('*.py'))
-    files += [PLUGIN / 'mcp/requirements.txt']
+    files += sorted((PLUGIN / 'mcp').glob('requirements*.txt'))
     files += sorted(p for p in (PLUGIN / 'assets').rglob('*') if p.is_file())
     if local_mcp:
         files += [PLUGIN / 'mcp.json', PLUGIN / 'mcp/config.example.json']

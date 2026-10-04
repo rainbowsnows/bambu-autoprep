@@ -359,6 +359,10 @@ def generate_model(template: str, output_dir: str, parameters: Optional[dict[str
             "analysis": analyze_model(str(model)), "printer_started": False}
 
 
+from design import generate_custom_model
+mcp.tool()(generate_custom_model)
+
+
 from unsliced import prepare_unsliced_3mf
 mcp.tool()(prepare_unsliced_3mf)
 
