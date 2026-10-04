@@ -76,7 +76,7 @@ def test_complete_package_without_printer(installation,tmp_path):
     result=server.prepare_print(str(model),str(out))
     assert result['ok'] and not result['printer_started']
     assert result['preview_source']=='input_geometry_not_toolpaths'
-    for key in ('three_mf','preview_png','print_guide','settings_summary'): assert Path(result[key]).is_file()
+    for key in ('three_mf','preview_png','instruction_pdf','settings_summary'): assert Path(result[key]).is_file()
     summary=json.loads(Path(result['settings_summary']).read_text())
     assert summary['effective_process']['wall_loops']=='3'
     exe.write_text('#!/usr/bin/env python3\n')

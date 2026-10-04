@@ -115,22 +115,12 @@ def prepare_unsliced_3mf(model_path: str, output_dir: str, use: str = "general",
                    "preview_source": "actual_geometry_not_toolpaths",
                    "profile_note": "Settings are saved inside the Bambu project; open as a project to load them." if embed_settings else "Geometry only: apply recommendations manually."}
         (work / "settings_summary.json").write_text(json.dumps(summary, indent=2), encoding="utf-8")
-        guide = "# Print Guide — unsliced model\n\n"
-        guide += ("This unsliced Bambu project contains actual geometry, saved settings and a thumbnail. No sliced toolpaths.\n\n" if embed_settings else "This geometry 3MF has no embedded settings or sliced toolpaths.\n\n")
-        guide += f"1. Download {output_name}. Open it as a PROJECT in Bambu Studio to retain saved settings; geometry-only import discards settings.\n"
-        guide += "2. Confirm the saved printer, nozzle, filament and plate match your actual equipment.\n"
-        guide += ("3. Settings are already saved: review settings_summary.json. Retain vendor machine and material defaults.\n" if embed_settings else "3. Apply the recommendations in settings_summary.json.\n")
-        guide += "4. Check dimensions, plate fit, first-layer contact, orientation, thin walls and supports.\n"
-        guide += "5. Press Slice plate. Review the sliced preview and resolve any errors.\n"
-        guide += "6. Start the print manually after review. This plugin never starts a physical printer.\n\n"
-        guide += "Support estimates may include bridges. Fit, strength and tiny details need review.\n"
-        (work / "PRINT_GUIDE.md").write_text(guide, encoding="utf-8")
         create_guide(mesh, work / "Instruction_Manual.pdf", summary, output_name, presentation)
-        for name in (output_name, "printable_model.stl", "preview.png", "settings_summary.json", "PRINT_GUIDE.md", "Instruction_Manual.pdf"):
+        for name in (output_name, "printable_model.stl", "preview.png", "settings_summary.json", "Instruction_Manual.pdf"):
             shutil.copy2(work / name, outdir / name)
     return {"ok": True, "three_mf": str(outdir / output_name),
             "model_file": str(outdir / "printable_model.stl"), "preview_png": str(outdir / "preview.png"),
-            "settings_summary": str(outdir / "settings_summary.json"), "print_guide": str(outdir / "PRINT_GUIDE.md"),
+            "settings_summary": str(outdir / "settings_summary.json"),
             "instruction_pdf": str(outdir / "Instruction_Manual.pdf"),
             "status": "unsliced", "settings_embedded": embed_settings, "requires_manual_slicing": True,
             "printer_started": False}

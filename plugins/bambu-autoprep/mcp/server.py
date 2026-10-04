@@ -490,27 +490,14 @@ def prepare_3mf(
                    "auto_arrange": auto_arrange, "preview_source": preview_source,
                    "printer_started": False, "validated": "3MF ZIP, model, and nonempty sliced G-code"}
         write_json(work / "settings_summary.json", summary)
-        guide = ("# Print Guide\n\n"
-                 f"Printer: {summary['machine_profile']}\n\nFilament: {summary['filament_profile']}\n\n"
-                 f"Plate: {plate}\n\nProcess: {summary['process_profile']}\n\n"
-                 f"Orientation: {'Bambu auto-orient; inspect final placement' if auto_orient else 'Input orientation preserved'}\n\n"
-                 f"Supports: {process.get('enable_support', 'profile default')}; brim: {process.get('brim_type', 'profile default')}\n\n"
-                 "See settings_summary.json for selected walls, infill, layers, and other effective settings.\n\n"
-                 f"Preview source: {preview_source}. A geometry preview does not show sliced supports or toolpaths.\n\n"
-                 "1. Open ready_to_print.3mf in Bambu Studio. Confirm the physical printer and installed nozzle.\n"
-                 "2. Confirm filament, feed path/AMS compatibility, and plate match the project.\n"
-                 "3. Clean and correctly seat the plate. Inspect first layer, supports, bridges, and part clearances.\n"
-                 "4. Start printing manually after reviewing the sliced project. AutoPrep cannot start the printer.\n"
-                 "5. Let the plate cool; remove the part, supports, and brim carefully.\n")
-        (work / "PRINT_GUIDE.md").write_text(guide.replace("ready_to_print.3mf", output_name), encoding="utf-8")
         from presentation import render_poster, create_guide
         render_poster(mesh, work / "print_image.png")
         create_guide(mesh, work / "Instruction_Manual.pdf", summary, output_name)
         # Commit artifacts only after every requested deliverable has been generated.
-        for name in (output_name, "preview.png", "settings_summary.json", "PRINT_GUIDE.md", "print_image.png", "Instruction_Manual.pdf"):
+        for name in (output_name, "preview.png", "settings_summary.json", "print_image.png", "Instruction_Manual.pdf"):
             shutil.copy2(work / name, outdir / name)
     return {"ok": True, "three_mf": str(output_3mf), "preview_png": str(outdir / "preview.png"),
-            "settings_summary": str(outdir / "settings_summary.json"), "print_guide": str(outdir / "PRINT_GUIDE.md"),
+            "settings_summary": str(outdir / "settings_summary.json"),
             "instruction_pdf": str(outdir / "Instruction_Manual.pdf"), "print_image_png": str(outdir / "print_image.png"),
             "printer_started": False, "preview_source": preview_source}
 

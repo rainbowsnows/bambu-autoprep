@@ -54,7 +54,10 @@ def test_unsliced_roundtrip_without_bambu(tmp_path, monkeypatch):
     settings = json.loads(Path(result['settings_summary']).read_text())
     assert settings['recommended_settings']['wall_loops'] == 4
     assert settings['settings_embedded'] is False
-    assert 'Slice plate' in Path(result['print_guide']).read_text()
+    from pypdf import PdfReader
+    assert 'Slice plate' in '\n'.join(p.extract_text() for p in PdfReader(result['instruction_pdf']).pages)
+    assert 'print_guide' not in result
+    assert not (tmp_path / 'package' / 'PRINT_GUIDE.md').exists()
     with pytest.raises(ValueError, match='no sliced G-code'):
         server.validate_sliced_3mf(Path(result['three_mf']))
 
@@ -67,7 +70,7 @@ def test_offline_cli_generates_ghost(tmp_path):
     loaded = trimesh.load(report['three_mf'], force='mesh')
     assert loaded.is_watertight and loaded.is_volume
     assert loaded.extents[2] == pytest.approx(40)
-    for key in ('model_file', 'three_mf', 'preview_png', 'settings_summary', 'print_guide'):
+    for key in ('model_file', 'three_mf', 'preview_png', 'settings_summary', 'instruction_pdf'):
         assert Path(report[key]).is_file()
 
 
